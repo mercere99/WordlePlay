@@ -16,6 +16,9 @@
 //#include "emp/web/Selector.hpp"
 #include "emp/web/web.hpp"
 
+#include "WordSet.hpp"
+#include "5-letter-words.hpp"
+
 namespace UI = emp::web;
 
 class WordleDriver : public UI::Animate {
@@ -36,6 +39,7 @@ private:
   std::string message;
 
   emp::vector<std::string> words;
+  WordSet<5> word_set5;
   // UI::Selector mode_select;
 
   enum class Status { NONE=0, NOWHERE, ELSEWHERE, HERE };
@@ -177,7 +181,11 @@ public:
   , layout(1,2)
   , word_table(6,5,"word_table")
   , info_panel("info_panel")
+  , word_set5(wordlist5)
   {
+    // Initialize WordSet
+    // word_set5.SortWords("word");
+
     // Initialize variables
     words.resize(max_tries);
     status.resize(max_tries);
@@ -222,6 +230,17 @@ public:
   WordleDriver(WordleDriver &&) = delete;
 
   void DoFrame() {
+    // Make sure pre-processing occurs.
+    if (word_set5.Preprocess() == false) {
+      double progress = word_set5.GetProgress();  // 0 to 100
+      size_t filled = (size_t) progress / 4;
+      size_t unfilled = 25 - filled;
+      std::string bar = emp::repeat("#",filled) + emp::repeat("-",unfilled);
+      info_panel.Clear();
+      info_panel << "LOADING WORDS. Progress: " << progress << "%<br>[" << bar << "]<br>";
+      return;
+    }  
+
     if (needs_update == false) return;
     needs_update = false;    
 
@@ -251,12 +270,12 @@ public:
     word_table.SetCSS("border-collapse", "collapse");
     word_table.SetCSS("border", "3px solid black");
     word_table.CellsCSS("border", "1px solid black");
-    word_table.CellsCSS("width", "30px");
-    word_table.CellsCSS("height", "30px");
+    word_table.CellsCSS("width", "50px");
+    word_table.CellsCSS("height", "50px");
     // word_table.CellsCSS("background-color", "white");
     word_table.CellsCSS("text-align", "center");
     word_table.CellsCSS("font-family", "arial");
-    word_table.CellsCSS("font-size", "20pt");
+    word_table.CellsCSS("font-size", "35pt");
 
     // Pay extra attention to the styling of the active cell.
     auto active_cell = word_table.GetCell(active_row, active_col);
@@ -271,6 +290,7 @@ public:
     info_panel << "active_row: " << active_row << "<br>"
                << "active_col: " << active_col << "<br>"
                << "full_rows: " << full_rows << "<br>"
+               << "pp_stage: " << word_set5.GetPPStage() << "<br>"
                << "Status: " << message << "<br>"
     ;
   }
@@ -280,4 +300,8 @@ WordleDriver driver;
 
 int main()
 {
+  // WordSet<5> word_set();
+  // word_set.Load();
+  // word_set.SortWords("word");
+  // word_set.Preprocess();
 }
