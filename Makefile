@@ -1,4 +1,8 @@
 EMP_DIR := ../../Dropbox/Development/Empirical
+OUT_DIR := http://localhost/~charles/Wordle/
+
+#WEB_MEM := 67108864
+WEB_MEM := 268435456
 
 # Flags to use regardless of compiler
 CFLAGS_all := -std=c++17 -Wall -Wextra -Wno-unused-function -I$(EMP_DIR)/include/
@@ -10,9 +14,9 @@ CXX_native := g++
 OFLAGS_native_debug := -g -pedantic -DEMP_TRACK_MEM  -Wnon-virtual-dtor -Wcast-align -Woverloaded-virtual -Wconversion -Weffc++
 OFLAGS_native_opt := -O3 -DNDEBUG
 
-OFLAGS_web_debug := -g4 -pedantic -Wno-dollar-in-identifier-extension -s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap']" -s TOTAL_MEMORY=67108864 -s ASSERTIONS=2 -s DEMANGLE_SUPPORT=1 -Wnon-virtual-dtor -Wcast-align -Woverloaded-virtual -Wconversion -Weffc++
+OFLAGS_web_debug := -g4 -pedantic -Wno-dollar-in-identifier-extension -s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap']" -s TOTAL_MEMORY=$(WEB_MEM) -s ASSERTIONS=2 -s DEMANGLE_SUPPORT=1 -Wnon-virtual-dtor -Wcast-align -Woverloaded-virtual -Wconversion -Weffc++ --source-map-base $(OUT_DIR)
  # -s SAFE_HEAP=1
-OFLAGS_web_opt := -Os -DNDEBUG -s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap']" -s TOTAL_MEMORY=67108864
+OFLAGS_web_opt := -Os -DNDEBUG -s "EXPORTED_RUNTIME_METHODS=['ccall', 'cwrap']" -s TOTAL_MEMORY=$(WEB_MEM)
 
 CFLAGS_native_debug := $(CFLAGS_all) $(OFLAGS_native_debug)
 CFLAGS_native_opt := $(CFLAGS_all) $(OFLAGS_native_opt)
