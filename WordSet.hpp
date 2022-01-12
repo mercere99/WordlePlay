@@ -13,8 +13,10 @@
 #include "emp/datastructs/vector_utils.hpp"
 #include "emp/io/File.hpp"
 #include "emp/tools/string_utils.hpp"
+#include "emp/debug/alert.hpp"
 
 #include "Result.hpp"
+
 
 
 template <size_t WORD_SIZE=5>
@@ -78,37 +80,40 @@ private:
     }
   };
 
+  //////////////////////////////////////////////////////////////////////////////////////////
+  //  DATA MEMBERS
+  //////////////////////////////////////////////////////////////////////////////////////////
+
   emp::vector<WordData> words;                     ///< Data about all words in this Wordle
   emp::array<PositionClues, WORD_SIZE> pos_clues;  ///< A PositionClues object for each position.
   emp::array<LetterClues,26> let_clues;            ///< Clues based off the number of letters.
   std::unordered_map<std::string, size_t> pos_map; ///< Map of words to their position ids.
-  word_list_t start_options;                    ///< Current options.
+  word_list_t start_options;                       ///< Current options.
   size_t start_count;                              ///< Count of start options (cached)
 
-  std::istream & is;
-  std::ostream & os;
-
   bool verbose = true;
+  size_t pp_stage = 0;                            ///< How much pre-processing has been done?
 
 public:
-  WordSet(std::istream & _is, std::ostream & _os) : is(_is), os(_os) { }
+  WordSet() { }
+  WordSet(const emp::vector<std::string> & in_words) {
+    Load(in_words);
+  }
 
   /// Include a single word into this WordSet.
-  void AddWord(std::string & in_word) {
+  void AddWord(const std::string & in_word) {
     size_t id = words.size();      // Set a unique ID for this word.
     pos_map[in_word] = id;         // Keep track of the ID for this word.
     words.emplace_back(in_word);   // Setup the word data.
   }
 
   /// Load a whole series for words (from a file) into this WordSet
-  void Load() {
+  void Load(const emp::vector<std::string> & in_words) {
     // Load in all of the words.
-    std::string in_word;
     size_t wrong_size_count = 0;
     size_t invalid_char_count = 0;
     size_t dup_count = 0;
-    while (is) {
-      is >> in_word;
+    for (const std::string & in_word : in_words) {
       // Only keep words of the correct size and all lowercase.
       if (in_word.size() != WORD_SIZE) { wrong_size_count++; continue; }
       if (!emp::is_lower(in_word)) { invalid_char_count++; continue; }
@@ -129,8 +134,19 @@ public:
                 << std::endl;
     }
 
-    if (verbose) std::cerr << "Loaded " << words.size() << " valid words." << std::endl;
+    if (verbose) std::cout << "Loaded " << words.size() << " valid words." << std::endl;
   }
+
+  void Load(const std::string & filename) {
+    std::ifstream is(filename);
+    emp::vector<std::string> in_words;
+    std::string new_word;
+    while (is) {
+      is >> new_word;
+      in_words.push_back(new_word);
+    }
+    Load(in_words);
+  }  
 
   /// Clear out all prior guess information.
   void ResetOptions() {
@@ -203,9 +219,7 @@ public:
     guess.entropy = entropy;
   }
 
-
-  /// Once the words are loaded, Preprocess will collect info.
-  void Preprocess() {
+  bool Preprocess_SetupClues() {
     std::cout << "Beginning pre-process phase..." << std::endl;
 
     // Setup all position clue info to know the number of words.
@@ -220,6 +234,10 @@ public:
       let_clues[let].SetNumWords(words.size());
     }
 
+    return true;
+  }
+
+  bool Preprocess_LinkClues() {
     // Counters for number of letters.
     emp::array<uint8_t, 26> letter_counts;
 
@@ -247,10 +265,12 @@ public:
       }
     }
 
-    std::cout << "...clues are initialized..." << std::endl;
+    std::cout << "...clues are initialized for all " << words.size() << " words..." << std::endl;
 
-    ResetOptions();
+    return true;
+  }
 
+  bool Preprocess_IdentifyNextWords() {
     // Loop through words one more time, filling out result lists and collecting data.
     size_t word_count = 0;
     const size_t step = words.size() / 100;
@@ -267,7 +287,41 @@ public:
       AnalyzeGuess(word_info, start_options);
     }
 
-    std::cout << "...words are analyzed..." << std::endl;
+    std::cout << "..." << word_count << " words are analyzed; " << result_t::NUM_IDS << " results each..." << std::endl;
+
+    return true;
+  }
+
+  /// Return a value 0.0 to 100.0 indicating current progress.
+  double GetProgress() const { return pp_stage * 20; }
+  size_t GetPPStage() const { return pp_stage; }
+
+  /// Once the words are loaded, Preprocess will collect info.
+  bool Preprocess() {
+    if (pp_stage == 0) {
+      emp::Alert("Ping1!");
+      if (Preprocess_SetupClues()) pp_stage++;
+      return false;
+    }
+    if (pp_stage == 1) {
+      emp::Alert("Ping2!");
+      if (Preprocess_LinkClues()) pp_stage++;
+      return false;
+    }
+    if (pp_stage == 2) {
+      emp::Alert("Ping3!");
+      ResetOptions();
+      pp_stage++;
+      return false;
+    }
+    if (pp_stage == 3) {
+      emp::Alert("Ping4!");
+      if (Preprocess_IdentifyNextWords()) pp_stage++;
+      return false;
+    }
+
+    pp_stage = 100;
+    return true;
   }
 
   /// Print all of the words with a given set of IDs.
@@ -405,7 +459,7 @@ public:
 
     of << "</body>\n</html>\n";
 
-    os << "Printed file '" << filename << "'." << std::endl;
+    std::cout << "Printed file '" << filename << "'." << std::endl;
   }
 
   void PrintHTMLWordID(int id) const { PrintHTMLWord(words[(size_t) id]); }
