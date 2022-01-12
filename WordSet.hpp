@@ -92,7 +92,9 @@ private:
   size_t start_count;                              ///< Count of start options (cached)
 
   bool verbose = true;
-  size_t pp_stage = 0;                            ///< How much pre-processing has been done?
+  size_t pp_stage = 0;                             ///< How much pre-processing has been done?
+  size_t pp_id_next = 0;                           ///< Word to be pre-processed for next, next.
+  size_t pp_progress = 0;                          ///< Track how much progress we've made pre-processing.
 
 public:
   WordSet() { }
@@ -205,6 +207,7 @@ public:
 
     // Scan through all of the possible result IDs.
     for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
+      if (guess.next_words[result_id].GetSize() == 0) continue;  // If next words was invalid, it's empty.
       word_list_t next_options = guess.next_words[result_id] & cur_words;
       size_t num_options = next_options.CountOnes();
       if (num_options > max_options) max_options = num_options;
@@ -271,20 +274,21 @@ public:
   }
 
   bool Preprocess_IdentifyNextWords() {
+    std::cout << "Beginning to identify next-word options for " << words.size() << " words." << std::endl;
+
     // Loop through words one more time, filling out result lists and collecting data.
     size_t word_count = 0;
-    const size_t step = words.size() / 100;
-    for (auto & word_info : words) {
-      if (++word_count % step == 0) {
-        std::cout << ".";
-        std::cout.flush();
-      }
+    const size_t step = words.size() / 85;
+    while (pp_id_next < words.size()) {
+      if (++word_count == step) { pp_progress++; return false; } // Keep taking breaks to update screen...
+      WordData & word_data = words[pp_id_next++];
+      std::cout << "Cur word = " << word_data.word << std::endl;
       for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
         Result result(result_id);
-        if (!result.IsValid(word_info.word)) continue;
-        word_info.next_words[result_id] = EvalGuess(word_info.word, result_id);
+        if (!result.IsValid(word_data.word)) continue;
+        word_data.next_words[result_id] = EvalGuess(word_data.word, result_id);
       }
-      AnalyzeGuess(word_info, start_options);
+      AnalyzeGuess(word_data, start_options);
     }
 
     std::cout << "..." << word_count << " words are analyzed; " << result_t::NUM_IDS << " results each..." << std::endl;
@@ -293,29 +297,29 @@ public:
   }
 
   /// Return a value 0.0 to 100.0 indicating current progress.
-  double GetProgress() const { return pp_stage * 20; }
+  double GetProgress() const { return pp_stage * 5 + pp_progress; }
   size_t GetPPStage() const { return pp_stage; }
 
   /// Once the words are loaded, Preprocess will collect info.
   bool Preprocess() {
     if (pp_stage == 0) {
-      emp::Alert("Ping1!");
+      // emp::Alert("Ping1!");
       if (Preprocess_SetupClues()) pp_stage++;
       return false;
     }
     if (pp_stage == 1) {
-      emp::Alert("Ping2!");
+      // emp::Alert("Ping2!");
       if (Preprocess_LinkClues()) pp_stage++;
       return false;
     }
     if (pp_stage == 2) {
-      emp::Alert("Ping3!");
+      // emp::Alert("Ping3!");
       ResetOptions();
       pp_stage++;
       return false;
     }
     if (pp_stage == 3) {
-      emp::Alert("Ping4!");
+      // emp::Alert("Ping4!");
       if (Preprocess_IdentifyNextWords()) pp_stage++;
       return false;
     }
