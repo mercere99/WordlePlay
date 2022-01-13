@@ -27,6 +27,7 @@ CFLAGS_web_opt := $(CFLAGS_all) $(OFLAGS_web_opt) --js-library $(EMP_DIR)/includ
 
 
 JS_TARGETS := Wordle.js
+CPP_TARGETS := Wordle-CommandLine
 
 default: web
 
@@ -34,6 +35,10 @@ default: web
 # CFLAGS := $(CFLAGS_native_opt)
 CXX := $(CXX_web)
 CFLAGS := $(CFLAGS_web_opt)
+
+native: CXX := $(CXX_native)
+native: CFLAGS := $(CFLAGS_native_opt)
+native: $(CPP_TARGETS)
 
 debug: CFLAGS_web := $(CFLAGS_web_debug)
 debug: $(JS_TARGETS)
@@ -50,11 +55,14 @@ $(JS_TARGETS): %.js : %.cpp # $(WEB)/%.h
 	$(CXX_web) $(CFLAGS_web) $< -o $@
 
 
+$(CPP_TARGETS): % : %.cpp
+	$(CXX) $(CFLAGS) $< -o $@
+
 debug-%: $*.cpp
 	$(CXX_native) $(CFLAGS_native) $< -o $@
 
 clean:
-	rm -f debug-* $(JS_TARGETS) *.js.map *.js.mem *~ source/*.o source/*/*.o
+	rm -f debug-* $(JS_TARGETS) $(CPP_TARGETS) *.js.map *.js.mem *~ *.o
 
 # Debugging information
 #print-%: ; @echo $*=$($*)
