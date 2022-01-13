@@ -16,11 +16,11 @@
 #include "emp/debug/alert.hpp"
 
 #include "Result.hpp"
-
+#include "WordSetBase.hpp"
 
 
 template <size_t WORD_SIZE=5>
-class WordSet {
+class WordSet : public WordSetBase {
 private:
   static constexpr size_t MAX_LETTER_REPEAT = 4;
   using word_list_t = emp::BitVector;
@@ -65,6 +65,7 @@ private:
     emp::BitSet<26> letters;        // What letters are in this word?
     emp::BitSet<26> multi_letters;  // What letters are in this word more than once?
     std::array<word_list_t, result_t::NUM_IDS> next_words;
+    bool has_next_words = false;
 
     // Collected data
     size_t max_options = 0;         // Maximum number of word options after used as a guess.
@@ -77,6 +78,12 @@ private:
         if (letters.Has(let_id)) multi_letters.Set(let_id);
         else letters.Set(let_id);
       }
+    }
+
+    // For memory efficiency, clearing words may be needed.
+    void ClearNextWords() {
+      for (auto & x : next_words) x.resize(0);
+      has_next_words = false;
     }
   };
 
@@ -102,15 +109,18 @@ public:
     Load(in_words);
   }
 
+  size_t GetSize() const { return words.size(); }
+  size_t GetNumResults() const { return result_t::NUM_IDS; }
+
   /// Include a single word into this WordSet.
-  void AddWord(const std::string & in_word) {
+  void AddWord(const std::string & in_word) override {
     size_t id = words.size();      // Set a unique ID for this word.
     pos_map[in_word] = id;         // Keep track of the ID for this word.
     words.emplace_back(in_word);   // Setup the word data.
   }
 
   /// Load a whole series for words (from a file) into this WordSet
-  void Load(const emp::vector<std::string> & in_words) {
+  void Load(const emp::vector<std::string> & in_words) override {
     // Load in all of the words.
     size_t wrong_size_count = 0;
     size_t invalid_char_count = 0;
@@ -139,7 +149,7 @@ public:
     if (verbose) std::cout << "Loaded " << words.size() << " valid words." << std::endl;
   }
 
-  void Load(const std::string & filename) {
+  void Load(const std::string & filename) override {
     std::ifstream is(filename);
     emp::vector<std::string> in_words;
     std::string new_word;
@@ -151,7 +161,7 @@ public:
   }  
 
   /// Clear out all prior guess information.
-  void ResetOptions() {
+  void ResetOptions() override {
     start_count = words.size();
     start_options.resize(start_count);
     start_options.SetAll();
@@ -159,14 +169,17 @@ public:
 
   // Limit the current options based on a single guess and its result.
 
-  word_list_t EvalGuess(const std::string & guess, const result_t & result) {
+  word_list_t LimitWithGuess(
+    const std::string & guess,
+    const result_t & result,
+    word_list_t word_options
+  ) {
     emp_assert(guess.size() == WORD_SIZE);
     emp_assert(result.size() == WORD_SIZE);
 
     emp::array<uint8_t, 26> letter_counts;
     std::fill(letter_counts.begin(), letter_counts.end(), 0);
     emp::BitSet<26> letter_fail;
-    word_list_t word_options = start_options;
 
     // First add letter clues and collect letter information.
     for (size_t i = 0; i < WORD_SIZE; ++i) {
@@ -183,27 +196,53 @@ public:
       }
     }
 
-    // Next add letter clues.
+    // Next add letter frequency clues.
     for (size_t letter_id = 0; letter_id < 26; ++letter_id) { 
       const size_t let_count = letter_counts[letter_id];
-      if (let_count) {
-        word_options &= let_clues[letter_id].at_least[let_count];
-      }
+      // If a letter failed, we know exactly how many there are.
       if (letter_fail.Has(letter_id)) {
         word_options &= let_clues[letter_id].exactly[let_count];
+      }
+
+      // Otherwise we know it's at least the number that we tested.
+      else if (let_count) {
+        word_options &= let_clues[letter_id].at_least[let_count];
       }
     }
 
     return word_options;
   }
 
+  word_list_t LimitWithGuess(const std::string & guess, const result_t & result) {
+    return LimitWithGuess(guess, result, start_options);
+  }
 
+  void CalculateNextWords(WordData & word_data) {
+    if (word_data.has_next_words) return;  // Already calculated!
+
+    // Step through each possible result and determine what words that would leave.
+    for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
+      Result result(result_id);
+      if (!result.IsValid(word_data.word)) continue;
+      word_data.next_words[result_id] = LimitWithGuess(word_data.word, result_id);
+    }    
+    word_data.has_next_words = true;
+  }
+
+  void CalculateNextWords(size_t word_id) override {
+    CalculateNextWords(words[word_id]);
+  }
+
+  /// Analyze all of the possible results associated with a given word to fill out its stats.
   void AnalyzeGuess(WordData & guess, const word_list_t & cur_words) {
     size_t max_options = 0;
     size_t total_options = 0;
     size_t option_count = 0;
     double entropy = 0.0;
     const double word_count = static_cast<double>(words.size());
+
+    // Make sure we have the needed next words.
+    CalculateNextWords(guess);
 
     // Scan through all of the possible result IDs.
     for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
@@ -216,10 +255,17 @@ public:
       double p = static_cast<double>(num_options) / word_count;
       if (p > 0.0) entropy -= p * std::log2(p);
     }
+    
+    guess.ClearNextWords(); // We no longer need the next words!
 
+    // Save all of the collected data.
     guess.max_options = max_options;
     guess.ave_options = static_cast<double>(total_options) / static_cast<double>(words.size());
     guess.entropy = entropy;
+  }
+
+  void AnalyzeGuess(size_t word_id, const word_list_t & cur_words) override {
+    AnalyzeGuess(words[word_id], cur_words);
   }
 
   bool Preprocess_SetupClues() {
@@ -274,34 +320,27 @@ public:
   }
 
   bool Preprocess_IdentifyNextWords() {
-    std::cout << "Beginning to identify next-word options for " << words.size() << " words." << std::endl;
+    // std::cout << "Beginning to identify next-word options for " << words.size() << " words." << std::endl;
 
     // Loop through words one more time, filling out result lists and collecting data.
     size_t word_count = 0;
-    const size_t step = words.size() / 85;
+    const size_t step = words.size() / 98;
     while (pp_id_next < words.size()) {
       if (++word_count == step) { pp_progress++; return false; } // Keep taking breaks to update screen...
       WordData & word_data = words[pp_id_next++];
-      std::cout << "Cur word = " << word_data.word << std::endl;
-      for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
-        Result result(result_id);
-        if (!result.IsValid(word_data.word)) continue;
-        word_data.next_words[result_id] = EvalGuess(word_data.word, result_id);
-      }
+      // std::cout << "Cur word = " << word_data.word << std::endl;
       AnalyzeGuess(word_data, start_options);
     }
-
-    std::cout << "..." << word_count << " words are analyzed; " << result_t::NUM_IDS << " results each..." << std::endl;
 
     return true;
   }
 
   /// Return a value 0.0 to 100.0 indicating current progress.
-  double GetProgress() const { return pp_stage * 5 + pp_progress; }
+  double GetProgress() const { return (pp_progress < 100.0) ? pp_progress : 100.0; }
   size_t GetPPStage() const { return pp_stage; }
 
   /// Once the words are loaded, Preprocess will collect info.
-  bool Preprocess() {
+  bool Preprocess() override {
     if (pp_stage == 0) {
       // emp::Alert("Ping1!");
       if (Preprocess_SetupClues()) pp_stage++;
@@ -368,24 +407,26 @@ public:
     }
   }
 
-  void PrintWordData(const WordData & word) const {
-    std::cout << "WORD:     " << word.word << std::endl;
-    std::cout << "Letters:  " << word.letters << std::endl;
-    std::cout << "Multi:    " << word.multi_letters << std::endl;
-    std::cout << "MAX Opts: " << word.max_options << std::endl;
-    std::cout << "AVE Opts: " << word.ave_options << std::endl;
-    std::cout << "Entropy:  " << word.entropy << std::endl;
+  void PrintWordData(const WordData & word_data) const {
+    std::cout << "WORD:     " << word_data.word << std::endl;
+    std::cout << "Letters:  " << word_data.letters << std::endl;
+    std::cout << "Multi:    " << word_data.multi_letters << std::endl;
+    std::cout << "MAX Opts: " << word_data.max_options << std::endl;
+    std::cout << "AVE Opts: " << word_data.ave_options << std::endl;
+    std::cout << "Entropy:  " << word_data.entropy << std::endl;
     std::cout << std::endl;
 
     size_t total_count = 0;
+    CalculateNextWords(word_data);
     for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
       result_t result(result_id);
-      word_list_t result_words = word.next_words[result_id];
+      word_list_t result_words = word_data.next_words[result_id];
       std::cout << result_id << " - " << result.ToString() << " ";
       PrintWords(result_words, 10);
       total_count += result_words.CountOnes();
       std::cout << std::endl;
     }
+    word_data.ClearNextWords();
     std::cout << "Total Count: " << total_count << std::endl;
   }
 
@@ -446,6 +487,7 @@ public:
     of << "Information provided: " << word.entropy << "<br>\n<p>\n";
 
     // Loop through all possible results.
+    CalculateNextWords(word);
     // for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
     for (size_t result_id = result_t::NUM_IDS-1; result_id < result_t::NUM_IDS; --result_id) {
       result_t result(result_id);
@@ -459,6 +501,7 @@ public:
 
       of << "<br>\n";
     }
+    word.ClearNextWords();
 
 
     of << "</body>\n</html>\n";
