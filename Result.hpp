@@ -1,39 +1,49 @@
+#ifndef WORDLE_RESULT_HPP
+#define WORDLE_RESULT_HPP
+
 #include "emp/base/array.hpp"
 #include "emp/base/error.hpp"
+#include "emp/bits/BitVector.hpp"
 #include "emp/math/math.hpp"
 
-template <size_t WORD_SIZE=5>
 class Result {
 public:
-  enum PositionResult { NOWHERE, ELSEWHERE, HERE };
-  static constexpr size_t NUM_IDS = emp::Pow(3, WORD_SIZE);
+  enum PositionResult { NOWHERE, ELSEWHERE, HERE, NONE };
+
+  // Return the number of IDs for a given length result.
+  static constexpr size_t CalcNumIDs(size_t result_size) { return emp::Pow(3, result_size); }
 
 private:
-  using results_t = emp::array<PositionResult, WORD_SIZE>;
+  using results_t = emp::vector<PositionResult>;
 
   results_t results;
   size_t id;
 
   /// Return a result array where each index is an associated (unique) possible result set.
-  static const results_t & LookupResult(size_t result_id) {
-    static emp::array<results_t, NUM_IDS> result_array;
-    static bool init = false;
+  static const results_t & LookupResult(const size_t result_size, const size_t result_id) {
+    constexpr size_t MAX_WORD_SIZE = 15;
+    emp_assert(result_size < MAX_WORD_SIZE);
+    static emp::array< emp::vector<results_t>, MAX_WORD_SIZE > result_matrix;
+
+    emp::vector<results_t> & result_vector = result_matrix[result_size];
 
     // If this is our first time requsting the result array, generate it.
-    if (!init) {
-      init = true;
-      for (size_t id = 0; id < NUM_IDS; ++id) {
+    if (result_vector.size() == 0) {
+      const size_t num_IDs = CalcNumIDs(result_size);
+      result_vector.resize(num_IDs);
+      for (size_t id = 0; id < num_IDs; ++id) {
+        result_vector[id].resize(result_size);
         size_t tmp_id = id;
-        for (size_t pos = WORD_SIZE-1; pos < WORD_SIZE; --pos) {
-          const size_t magnitude = emp::Pow(3, pos);
+        for (size_t pos = result_size-1; pos < result_size; --pos) {
+          const size_t magnitude = static_cast<size_t>(emp::Pow(3, static_cast<int>(pos)));
           const size_t cur_result = tmp_id / magnitude;
-          result_array[id][pos] = static_cast<PositionResult>(cur_result);
+          result_vector[id][pos] = static_cast<PositionResult>(cur_result);
           tmp_id -= cur_result * magnitude;
         }
       }
     }
 
-    return result_array[result_id];
+    return result_vector[result_id];
   }
 
   /// Assume that we have results, calculate the associated ID.
@@ -44,25 +54,30 @@ private:
   }
 
   /// Assume that we have an ID, lookup the correct results.
-  void CalcResults() { results = LookupResult(id); }
+  void CalcResults() { results = LookupResult(results.size(), id); }
+  void CalcResults(size_t result_size) { results = LookupResult(result_size, id); }
 
   /// Convert a results string of 'N's, 'E's, and 'W's into a Results object.
   void FromString(const std::string & result_str) {
-    emp_assert(result_str.size() == WORD_SIZE);
-    for (size_t i=0; i < WORD_SIZE; ++i) {
+    results.resize(result_str.size());
+    for (size_t i=0; i < result_str.size(); ++i) {
       switch (result_str[i]) {
       case 'N': case 'n': results[i] = NOWHERE;   break;
       case 'E': case 'e': results[i] = ELSEWHERE; break;
       case 'H': case 'h': results[i] = HERE;      break;
       default:
-        emp_error("Invalid character in result string", result_str[i]);
+        // @CAO Use exception?
+        results[i] = NONE;
       };
     }
   }
 
 public:
+  /// Default constructor (to make arrays of results easier to deal with)
+  Result() : id(0) {}
+
   /// Create a result by id.
-  Result(size_t _id) : id(_id) { CalcResults(); }
+  Result(size_t result_size, size_t _id) : id(_id) { CalcResults(result_size); }
 
   /// Create a result by a result array.
   Result(const results_t & _results) : results(_results) { CalcID(); }
@@ -72,8 +87,8 @@ public:
 
   /// Create a result by an guess and answer pair.
   Result(const std::string & guess, const std::string & answer) {
-    emp_assert(guess.size() == WORD_SIZE);
-    emp_assert(answer.size() == WORD_SIZE);
+    emp_assert(guess.size() == answer.size());
+    results.resize(guess.size());
     emp::BitVector used(answer.size());
     // Test perfect matches.
     for (size_t i = 0; i < guess.size(); ++i) {
@@ -99,30 +114,33 @@ public:
   Result(const Result & result) = default;
   Result(Result && result) = default;
 
-  Result & operator=(const std::string & result_str) { FromString(result_str); }
+  Result & operator=(const std::string & result_str) { FromString(result_str); return *this; }
   Result & operator=(const Result & result) = default;
   Result & operator=(Result && result) = default;
 
-  bool operator==(const Result & in) const { return id == in.id; }
-  bool operator!=(const Result & in) const { return id != in.id; }
-  bool operator< (const Result & in) const { return id <  in.id; }
-  bool operator<=(const Result & in) const { return id <= in.id; }
-  bool operator> (const Result & in) const { return id >  in.id; }
-  bool operator>=(const Result & in) const { return id >= in.id; }
-
   size_t GetID() const { return id; }
-  size_t GetSize() const { return WORD_SIZE; }
-  size_t size() const { return WORD_SIZE; }
+  size_t GetSize() const { return results.size(); }
+  size_t size() const { return results.size(); }
+
+  bool operator==(const Result & in) const { return size() == in.size() && id == in.id; }
+  bool operator!=(const Result & in) const { return size() != in.size() || id != in.id;; }
+  bool operator< (const Result & in) const { return size()==in.size() ? id <  in.id : size() < in.size(); }
+  bool operator<=(const Result & in) const { return size()==in.size() ? id <= in.id : size() < in.size(); }
+  bool operator> (const Result & in) const { return size()==in.size() ? id >  in.id : size() > in.size(); }
+  bool operator>=(const Result & in) const { return size()==in.size() ? id >= in.id : size() > in.size(); }
 
   PositionResult operator[](size_t id) const { return results[id]; }
 
   // Test if this result is valid for the given word.
   bool IsValid(const std::string & word) const {
+    // Result must be the correct size.
+    if (word.size() != results.size()) return false;
+
     // Disallow letters marked "NOWHERE" that are subsequently marked "ELSEWHERE"
     // (other order is okay).
-    for (size_t pos = 0; pos < WORD_SIZE-1; ++pos) {
+    for (size_t pos = 0; pos < results.size()-1; ++pos) {
       if (results[pos] == NOWHERE) {
-        for (size_t pos2 = pos+1; pos2 < WORD_SIZE; ++pos2) {
+        for (size_t pos2 = pos+1; pos2 < results.size(); ++pos2) {
           if (results[pos2] == ELSEWHERE && word[pos] == word[pos2]) return false;
         }
       }
@@ -145,3 +163,5 @@ public:
     return out;
   }
 };
+
+#endif
