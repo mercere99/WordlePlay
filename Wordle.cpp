@@ -18,6 +18,7 @@
 
 #include "WordSet.hpp"
 #include "5-letter-words.hpp"
+//#include "5-letter-words-mid.hpp"
 
 namespace UI = emp::web;
 
@@ -59,7 +60,9 @@ private:
   /// Helper to ensure active_row and active_col are legal.
   void ValidateActive() {
     full_rows = CountFullRows();
-    if (active_row > full_rows) active_row = full_rows;
+    bool next_active = TestActiveRow(full_rows);
+    if (next_active || active_row > full_rows) active_row = full_rows;
+    if (active_row < full_rows) active_row = full_rows - 1;
     if (active_row >= max_tries) active_row = max_tries-1;
     if (active_col > word_size) {
       active_col = word_size-1;
@@ -78,6 +81,14 @@ private:
       if (status[row_id][pos] == Status::NONE) return false;
     }
     return emp::is_upper(words[row_id]);
+  }
+
+  bool TestActiveRow(size_t row_id) {
+    for (size_t pos = 0; pos < word_size; pos++) {
+      if (status[row_id][pos] != Status::NONE) return true;
+      if (words[row_id][pos] != ' ') return true;
+    }
+    return false;
   }
 
   size_t CountFullRows() {
@@ -233,16 +244,18 @@ public:
     // Make sure pre-processing occurs.
     if (word_set5.Preprocess() == false) {
       double progress = word_set5.GetProgress();  // 0 to 100
-      size_t filled = (size_t) progress / 4;
-      size_t unfilled = 25 - filled;
+      size_t filled = (size_t) progress / 2;
+      size_t unfilled = 50 - filled;
       std::string bar = emp::repeat("#",filled) + emp::repeat("-",unfilled);
       info_panel.Clear();
-      info_panel << "LOADING WORDS. Progress: " << progress << "%<br>[" << bar << "]<br>";
+      info_panel << "ANALYZING WORDS. Progress: " << progress << "%<br><tt>[" << bar << "]</tt><br>";
       return;
     }  
 
     if (needs_update == false) return;
     needs_update = false;    
+
+    std::cout << "Updating Frame!" << std::endl;
 
     ValidateActive();
 
