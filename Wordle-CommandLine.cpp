@@ -11,7 +11,9 @@
 #include "emp/math/Random.hpp"
 #include "emp/tools/string_utils.hpp"
 
+#include "Result.hpp"
 #include "WordSet.hpp"
+
 #include "5-letter-words.hpp"
 //#include "5-letter-words-mid.hpp"
 
@@ -22,18 +24,12 @@ private:
   emp::vector<std::string> words;
   WordSet<5> word_set5;
 
-  enum class Status { NONE=0, NOWHERE, ELSEWHERE, HERE };
-  emp::vector< emp::vector<Status> > status;
+  emp::vector< Result > status;
 
-
-  std::string GetColor(Status status) {
-    switch (status) {
-    case Status::NONE: return "white";
-    case Status::NOWHERE: return "gray";
-    case Status::ELSEWHERE: return "yellow";
-    case Status::HERE: return "#90FF90";
-    }
-  }
+  struct Clue {
+    std::string word;
+    Result result;
+  };
 
   template <typename... Ts>
   void Error(Ts... args) {
@@ -62,6 +58,7 @@ public:
       << "            format: clue [word] [result]\n"
       << "   -help  : Provide addition information about a command.\n"
       << "            format: help [command]\n"
+      << "   -pop   : Remove (pop off) the most recent clue\n"
       << "   quit   : exit the program.\n"
       << "   reset  : erase all current clues.\n"
       << "   status : show the current clue stack.\n"
@@ -94,19 +91,33 @@ public:
       return;
     }
 
-    emp::vector<Status> clue_status(word_size);
-    for (size_t i = 0; i < word_size; ++i) {
-      switch (clue_result[i]) {
-      case 'h': case 'H': clue_status[i] = Status::HERE; break;
-      case 'e': case 'E': clue_status[i] = Status::ELSEWHERE; break;
-      case 'n': case 'N': clue_status[i] = Status::NOWHERE; break;
-      default:
-        Error("Unknown status '", clue_result[i], "'; using 'none'.");
-        clue_status[i] = Status::NONE;
-      }
-    }
+    Result clue_status(clue_result);
     words.push_back(clue_word);
     status.push_back(clue_status);
+
+    CommandStatus();
+  }
+
+  void CommandStatus() {
+    if (words.size() == 0) {
+      std::cout << "No clues currently enforced.\n";
+      return;
+    }
+
+    for (size_t word_id = 0; word_id < words.size(); ++word_id) {
+      std::cout << "  [" << word_id << "] : ";
+      for (size_t let_id = 0; let_id < word_size; ++let_id) {
+        switch (status[word_id][let_id]) {
+          case Result::HERE:      std::cout << emp::ANSI_Green()  << emp::ANSI_BlackBG(); break;
+          case Result::ELSEWHERE: std::cout << emp::ANSI_Yellow() << emp::ANSI_BlackBG(); break;
+          case Result::NOWHERE:   std::cout << emp::ANSI_Black()  << emp::ANSI_WhiteBG(); break;
+          case Result::NONE:      std::cout << emp::ANSI_Red()    << emp::ANSI_BlackBG(); break;
+        }
+        std::cout << words[word_id][let_id];
+      }
+      std::cout << emp::ANSI_Reset() << "\n";
+    }
+    std::cout.flush();
   }
 
   bool ProcessCommandLine() {
@@ -126,7 +137,7 @@ public:
       return true;
     }
 
-    if (args[0] == "exit" || args[0] == "quit" || args[0] == "q") return false;
+    if (args[0] == "quit" || args[0] == "exit" || args[0] == "q") return false;
 
     if (args[0] == "reset" || args[0] == "r") {
       std::cout << "Clearing all current clues." << std::endl;
@@ -136,21 +147,7 @@ public:
     }
 
     if (args[0] == "status" || args[0] == "s") {
-      std::cout << words.size() << " clues currently enforced.\n";
-      for (size_t word_id = 0; word_id < words.size(); ++word_id) {
-        std::cout << "  ";
-        for (size_t let_id = 0; let_id < word_size; ++let_id) {
-          switch (status[word_id][let_id]) {
-            case Status::HERE:      std::cout << emp::ANSI_Green()  << emp::ANSI_BlackBG(); break;
-            case Status::ELSEWHERE: std::cout << emp::ANSI_Yellow() << emp::ANSI_BlackBG(); break;
-            case Status::NOWHERE:   std::cout << emp::ANSI_Black()  << emp::ANSI_WhiteBG(); break;
-            case Status::NONE:      std::cout << emp::ANSI_Red()    << emp::ANSI_BlackBG(); break;
-          }
-          std::cout << words[word_id][let_id];
-        }
-        std::cout << emp::ANSI_Reset() << "\n";
-      }
-      std::cout.flush();
+      CommandStatus();
       return true;
     }
 
