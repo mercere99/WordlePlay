@@ -23,8 +23,8 @@ template <size_t WORD_SIZE=5>
 class WordSet : public WordSetBase {
 private:
   static constexpr size_t MAX_LETTER_REPEAT = 4;
+  static constexpr size_t NUM_IDS = Result::CalcNumIDs(WORD_SIZE);
   using word_list_t = emp::BitVector;
-  using result_t = Result<WORD_SIZE>;
 
   // Get the ID (0-26) associated with a letter.
   static size_t ToID(char letter) {
@@ -36,6 +36,8 @@ private:
     emp_assert(id < 26);
     return static_cast<char>(id + 'a');
   }
+
+  static Result ToResult(size_t id) { return Result(WORD_SIZE, id); }
 
   // All of the clues for a given position.
   struct PositionClues {
@@ -64,7 +66,7 @@ private:
     // Pre=processed data
     emp::BitSet<26> letters;        // What letters are in this word?
     emp::BitSet<26> multi_letters;  // What letters are in this word more than once?
-    std::array<word_list_t, result_t::NUM_IDS> next_words;
+    std::array<word_list_t, NUM_IDS> next_words;
     bool has_next_words = false;
 
     // Collected data
@@ -110,7 +112,7 @@ public:
   }
 
   size_t GetSize() const { return words.size(); }
-  size_t GetNumResults() const { return result_t::NUM_IDS; }
+  static constexpr size_t GetNumResults() { return NUM_IDS; }
 
   /// Include a single word into this WordSet.
   void AddWord(const std::string & in_word) override {
@@ -171,7 +173,7 @@ public:
 
   word_list_t LimitWithGuess(
     const std::string & guess,
-    const result_t & result,
+    const Result & result,
     word_list_t word_options
   ) {
     emp_assert(guess.size() == WORD_SIZE);
@@ -184,10 +186,10 @@ public:
     // First add letter clues and collect letter information.
     for (size_t i = 0; i < WORD_SIZE; ++i) {
       const size_t cur_letter = ToID(guess[i]);
-      if (result[i] == result_t::HERE) {
+      if (result[i] == Result::HERE) {
         word_options &= pos_clues[i].here[cur_letter];
         ++letter_counts[cur_letter];
-      } else if (result[i] == result_t::ELSEWHERE) {
+      } else if (result[i] == Result::ELSEWHERE) {
         word_options &= ~pos_clues[i].here[cur_letter];
         ++letter_counts[cur_letter];
       } else {  // Must be 'N'
@@ -213,7 +215,7 @@ public:
     return word_options;
   }
 
-  word_list_t LimitWithGuess(const std::string & guess, const result_t & result) {
+  word_list_t LimitWithGuess(const std::string & guess, const Result & result) {
     return LimitWithGuess(guess, result, start_options);
   }
 
@@ -221,10 +223,10 @@ public:
     if (word_data.has_next_words) return;  // Already calculated!
 
     // Step through each possible result and determine what words that would leave.
-    for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
-      Result result(result_id);
+    for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
+      Result result(WORD_SIZE, result_id);
       if (!result.IsValid(word_data.word)) continue;
-      word_data.next_words[result_id] = LimitWithGuess(word_data.word, result_id);
+      word_data.next_words[result_id] = LimitWithGuess(word_data.word, ToResult(result_id));
     }    
     word_data.has_next_words = true;
   }
@@ -245,7 +247,7 @@ public:
     CalculateNextWords(guess);
 
     // Scan through all of the possible result IDs.
-    for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
+    for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
       if (guess.next_words[result_id].GetSize() == 0) continue;  // If next words was invalid, it's empty.
       word_list_t next_options = guess.next_words[result_id] & cur_words;
       size_t num_options = next_options.CountOnes();
@@ -418,8 +420,8 @@ public:
 
     size_t total_count = 0;
     CalculateNextWords(word_data);
-    for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
-      result_t result(result_id);
+    for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
+      Result result(WORD_SIZE, result_id);
       word_list_t result_words = word_data.next_words[result_id];
       std::cout << result_id << " - " << result.ToString() << " ";
       PrintWords(result_words, 10);
@@ -488,9 +490,9 @@ public:
 
     // Loop through all possible results.
     CalculateNextWords(word);
-    // for (size_t result_id = 0; result_id < result_t::NUM_IDS; ++result_id) {
-    for (size_t result_id = result_t::NUM_IDS-1; result_id < result_t::NUM_IDS; --result_id) {
-      result_t result(result_id);
+    // for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
+    for (size_t result_id = NUM_IDS-1; result_id < NUM_IDS; --result_id) {
+      Result result(WORD_SIZE, result_id);
       word_list_t result_words = word.next_words[result_id];
 
       of << result.ToString(green, yellow, white) << " (" << result_words.CountOnes() << " words) : ";
