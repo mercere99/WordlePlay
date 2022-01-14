@@ -7,8 +7,8 @@
  */
 
 #include "emp/base/vector.hpp"
-#include "emp/datastructs/vector_utils.hpp"
-#include "emp/math/Random.hpp"
+//#include "emp/datastructs/vector_utils.hpp"
+//#include "emp/math/Random.hpp"
 #include "emp/tools/string_utils.hpp"
 
 #include "Result.hpp"

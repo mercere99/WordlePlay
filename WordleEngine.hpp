@@ -8,10 +8,10 @@
 #include "emp/base/vector.hpp"
 #include "emp/bits/BitSet.hpp"
 #include "emp/bits/BitVector.hpp"
-#include "emp/config/command_line.hpp"
+//#include "emp/config/command_line.hpp"
 #include "emp/datastructs/map_utils.hpp"
 #include "emp/datastructs/vector_utils.hpp"
-#include "emp/io/File.hpp"
+//#include "emp/io/File.hpp"
 #include "emp/tools/string_utils.hpp"
 #include "emp/debug/alert.hpp"
 

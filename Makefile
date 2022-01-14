@@ -5,7 +5,7 @@ OUT_DIR := http://localhost/~charles/Wordle/
 WEB_MEM := 268435456
 
 # Flags to use regardless of compiler
-CFLAGS_all := -std=c++17 -Wall -Wextra -Wno-unused-function -I$(EMP_DIR)/include/
+CFLAGS_all := -std=c++20 -Wall -Wextra -Wno-unused-function # -I$(EMP_DIR)/include/
 
 # Emscripten compiler information
 CXX_web := emcc
