@@ -16,7 +16,7 @@
 //#include "emp/web/Selector.hpp"
 #include "emp/web/web.hpp"
 
-#include "WordSet.hpp"
+#include "WordleEngine.hpp"
 #include "5-letter-words.hpp"
 //#include "5-letter-words-mid.hpp"
 
@@ -40,7 +40,7 @@ private:
   std::string message;
 
   emp::vector<std::string> words;
-  WordSet<5> word_set5;
+  WordleEngine<5> word_set5;
   // UI::Selector mode_select;
 
   enum class Status { NONE=0, NOWHERE, ELSEWHERE, HERE };
@@ -194,7 +194,7 @@ public:
   , info_panel("info_panel")
   , word_set5(wordlist5)
   {
-    // Initialize WordSet
+    // Initialize WordleEngine
     // word_set5.SortWords("word");
 
     // Initialize variables
@@ -313,7 +313,7 @@ WordleDriver driver;
 
 int main()
 {
-  // WordSet<5> word_set();
+  // WordleEngine<5> word_set();
   // word_set.Load();
   // word_set.SortWords("word");
   // word_set.Preprocess();

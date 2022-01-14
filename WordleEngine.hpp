@@ -16,11 +16,11 @@
 #include "emp/debug/alert.hpp"
 
 #include "Result.hpp"
-#include "WordSetBase.hpp"
+#include "WordleEngineBase.hpp"
 
 
 template <size_t WORD_SIZE=5>
-class WordSet : public WordSetBase {
+class WordleEngine : public WordleEngineBase {
 private:
   static constexpr size_t MAX_LETTER_REPEAT = 4;
   static constexpr size_t NUM_IDS = Result::CalcNumIDs(WORD_SIZE);
@@ -45,7 +45,7 @@ private:
     std::array<word_list_t, 26> here;      // Is a given letter at this position?
 
     void SetNumWords(size_t num_words) {
-      for (auto & x : here) x.resize(num_words);
+      for (auto & x : here) { x.resize(num_words); x.Clear(); }
     }
   };
 
@@ -56,25 +56,36 @@ private:
     std::array<word_list_t, MAX_LETTER_REPEAT+1> exactly;  ///< Are there exactly x instances of letter?
 
     void SetNumWords(size_t num_words) {
-      for (auto & x : at_least) x.resize(num_words);
-      for (auto & x : exactly) x.resize(num_words);
+      for (auto & x : at_least) { x.resize(num_words); x.Clear(); }
+      for (auto & x : exactly) { x.resize(num_words); x.Clear(); }
     }
   };
 
-  struct WordData {
+  struct WordStats {
     std::string word;
+    size_t max_options = 0;     // Maximum number of word options after used as a guess.
+    double ave_options = 0.0;   // Average number of options after used as a guess.
+    double entropy = 0.0;       // What is the entropy (and thus information gained) for this choice?
+
+    WordStats() : word() { }
+    WordStats(const std::string & in_word) : word(in_word) { }
+    WordStats(const WordStats &) = default;
+    WordStats(WordStats &&) = default;
+
+    WordStats & operator=(const WordStats &) = default;
+    WordStats & operator=(WordStats &&) = default;
+  };
+
+  struct WordData : public WordStats {
     // Pre=processed data
     emp::BitSet<26> letters;        // What letters are in this word?
     emp::BitSet<26> multi_letters;  // What letters are in this word more than once?
     std::array<word_list_t, NUM_IDS> next_words;
     bool has_next_words = false;
 
-    // Collected data
-    size_t max_options = 0;         // Maximum number of word options after used as a guess.
-    double ave_options = 0.0;       // Average number of options after used as a guess.
-    double entropy = 0.0;           // What is the entropy (and thus information gained) for this choice?
+    using WordStats::word;
 
-    WordData(const std::string & in_word) : word(in_word) {
+    WordData(const std::string & in_word) : WordStats(in_word) {
       for (char x : word) {
         size_t let_id = ToID(x);
         if (letters.Has(let_id)) multi_letters.Set(let_id);
@@ -106,22 +117,95 @@ private:
   size_t pp_progress = 0;                          ///< Track how much progress we've made pre-processing.
 
 public:
-  WordSet() { }
-  WordSet(const emp::vector<std::string> & in_words) {
+  WordleEngine() { }
+  WordleEngine(const emp::vector<std::string> & in_words) {
     Load(in_words);
   }
 
   size_t GetSize() const { return words.size(); }
   static constexpr size_t GetNumResults() { return NUM_IDS; }
+   const word_list_t & GetOptions() { return start_options; }
 
-  /// Include a single word into this WordSet.
+  void AddClue(const std::string & in_word, Result in_result) {
+    start_options = LimitWithGuess(in_word, in_result);
+  }
+
+  struct WordSet {
+    emp::vector<WordStats> words;
+
+    size_t size() const { return words.size(); }
+
+    bool Sort(const std::string & sort_type="alpha") {
+      if (sort_type == "max") {
+        emp::Sort(words, [](const WordStats & w1, const WordStats & w2) {
+          if (w1.max_options == w2.max_options) return w1.ave_options < w2.ave_options; // tiebreak
+          return w1.max_options < w2.max_options;
+        } );
+      } else if (sort_type == "ave") {
+        emp::Sort(words, [](const WordStats & w1, const WordStats & w2){
+          if (w1.ave_options == w2.ave_options) return w1.max_options < w2.max_options; // tiebreak
+          return w1.ave_options < w2.ave_options;
+        } );
+      } else if (sort_type == "info") {
+        emp::Sort(words, [](const WordStats & w1, const WordStats & w2){ return w1.entropy > w2.entropy; } );
+      } else if (sort_type == "alpha") {
+        emp::Sort(words, [](const WordStats & w1, const WordStats & w2){ return w1.word < w2.word; } );
+      } else if (sort_type == "r-max") {
+        emp::Sort(words, [](const WordStats & w1, const WordStats & w2) {
+          if (w1.max_options == w2.max_options) return w1.ave_options > w2.ave_options; // tiebreak
+          return w1.max_options > w2.max_options;
+        } );
+      } else if (sort_type == "r-ave") {
+        emp::Sort(words, [](const WordStats & w1, const WordStats & w2){
+          if (w1.ave_options == w2.ave_options) return w1.max_options > w2.max_options; // tiebreak
+          return w1.ave_options > w2.ave_options;
+        } );
+      } else if (sort_type == "r-info") {
+        emp::Sort(words, [](const WordStats & w1, const WordStats & w2){ return w1.entropy < w2.entropy; } );
+      } else if (sort_type == "r-alpha") {
+        emp::Sort(words, [](const WordStats & w1, const WordStats & w2){ return w1.word > w2.word; } );
+      }
+      else return false;
+      return true;
+    }
+
+    void Write(std::size_t max_count, std::ostream & os=std::cout) const {
+      for (size_t i = 0; i < max_count && i < words.size(); ++i) {
+        std::cout << words[i].word << ", "
+                  << words[i].ave_options << ", "
+                  << words[i].max_options << ", "
+                  << words[i].entropy << std::endl;
+      }
+      if (max_count < words.size()) {
+        std::cout << "...plus " << (words.size() - max_count) << " more." << std::endl;
+      }
+    }
+  };
+
+  WordSet GetWords(const word_list_t & word_ids) {
+    WordSet out_set;
+    for (int id = word_ids.FindOne(); id >= 0; id = word_ids.FindOne(id+1)) {
+      out_set.words.push_back(words[id]);
+    }
+    return out_set;
+  }
+
+  WordSet GetWords() { return GetWords(start_options); }
+  WordSet GetAllWords() {
+    WordSet out_set;
+    out_set.words.reserve(words.size());
+    for (const auto & word : words) out_set.words.push_back(word);
+    return out_set;
+  }
+
+  /// Include a single word into this WordleEngine.
   void AddWord(const std::string & in_word) override {
     size_t id = words.size();      // Set a unique ID for this word.
     pos_map[in_word] = id;         // Keep track of the ID for this word.
     words.emplace_back(in_word);   // Setup the word data.
   }
 
-  /// Load a whole series for words (from a file) into this WordSet
+  /// Load a whole series for words (from a file) into this WordleEngine
   void Load(const emp::vector<std::string> & in_words) override {
     // Load in all of the words.
     size_t wrong_size_count = 0;
@@ -239,9 +323,8 @@ public:
   void AnalyzeGuess(WordData & guess, const word_list_t & cur_words) {
     size_t max_options = 0;
     size_t total_options = 0;
-    size_t option_count = 0;
     double entropy = 0.0;
-    const double word_count = static_cast<double>(words.size());
+    const double word_count = static_cast<double>(cur_words.CountOnes());
 
     // Make sure we have the needed next words.
     CalculateNextWords(guess);
@@ -251,9 +334,9 @@ public:
       if (guess.next_words[result_id].GetSize() == 0) continue;  // If next words was invalid, it's empty.
       word_list_t next_options = guess.next_words[result_id] & cur_words;
       size_t num_options = next_options.CountOnes();
-      if (num_options > max_options) max_options = num_options;
-      total_options += num_options * num_options;
-      option_count++;
+      if (num_options == 0) continue;                           // No words here; ignore.
+      if (num_options > max_options) max_options = num_options; // Track maximum options.
+      total_options += num_options * num_options;               // Total gets added once per hit.
       double p = static_cast<double>(num_options) / word_count;
       if (p > 0.0) entropy -= p * std::log2(p);
     }
@@ -262,7 +345,7 @@ public:
 
     // Save all of the collected data.
     guess.max_options = max_options;
-    guess.ave_options = static_cast<double>(total_options) / static_cast<double>(words.size());
+    guess.ave_options = static_cast<double>(total_options) / word_count;
     guess.entropy = entropy;
   }
 
@@ -271,7 +354,7 @@ public:
   }
 
   bool Preprocess_SetupClues() {
-    std::cout << "Beginning pre-process phase..." << std::endl;
+    // std::cout << "Beginning pre-process phase..." << std::endl;
 
     // Setup all position clue info to know the number of words.
     for (size_t i=0; i < WORD_SIZE; ++i) {
@@ -316,7 +399,7 @@ public:
       }
     }
 
-    std::cout << "...clues are initialized for all " << words.size() << " words..." << std::endl;
+    // std::cout << "...clues are initialized for all " << words.size() << " words..." << std::endl;
 
     return true;
   }
@@ -340,6 +423,13 @@ public:
   /// Return a value 0.0 to 100.0 indicating current progress.
   double GetProgress() const { return (pp_progress < 100.0) ? pp_progress : 100.0; }
   size_t GetPPStage() const { return pp_stage; }
+
+  /// If we are going to run Preprocess more than once, we need to reset it.
+  void ResetPreprocess() {
+    pp_stage = 0;
+    pp_id_next = 0;
+    pp_progress = 0;
+  }
 
   /// Once the words are loaded, Preprocess will collect info.
   bool Preprocess() override {
@@ -367,6 +457,11 @@ public:
 
     pp_stage = 100;
     return true;
+  }
+
+  /// If we don't want to reset everything, just identify the next words given our current state.
+  bool Process() {
+    return Preprocess_IdentifyNextWords();
   }
 
   /// Print all of the words with a given set of IDs.

@@ -2,12 +2,12 @@
 
 #include "emp/bits/BitVector.hpp"
 
-/// An abstract base class for all WordSets of different sizes.
-class WordSetBase {
+/// An abstract base class for all WordleEngines of different sizes.
+class WordleEngineBase {
 public:
   using word_list_t = emp::BitVector;
 
-  virtual ~WordSetBase() { }
+  virtual ~WordleEngineBase() { }
 
   virtual void AddWord(const std::string & in_word) = 0;
   virtual void Load(const emp::vector<std::string> & in_words) = 0;
