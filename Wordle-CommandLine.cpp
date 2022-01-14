@@ -223,6 +223,8 @@ public:
     getline(std::cin, input);
     emp::slice(input, args, ' ');
 
+    if (args.size() == 0) return true;  // Empty line!
+
     if (args[0] == "clue" || args[0] == "c") {
       if (args.size() != 3) Error("'clue' command requires exactly two arguments.");
       else CommandClue(args[1], args[2]);
