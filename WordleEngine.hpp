@@ -80,8 +80,6 @@ private:
     // Pre=processed data
     emp::BitSet<26> letters;        // What letters are in this word?
     emp::BitSet<26> multi_letters;  // What letters are in this word more than once?
-    std::array<word_list_t, NUM_IDS> next_words;
-    bool has_next_words = false;
 
     using WordStats::word;
 
@@ -93,11 +91,6 @@ private:
       }
     }
 
-    // For memory efficiency, clearing words may be needed.
-    void ClearNextWords() {
-      for (auto & x : next_words) x.resize(0);
-      has_next_words = false;
-    }
   };
 
   //////////////////////////////////////////////////////////////////////////////////////////
@@ -108,6 +101,7 @@ private:
   emp::array<PositionClues, WORD_SIZE> pos_clues;  ///< A PositionClues object for each position.
   emp::array<LetterClues,26> let_clues;            ///< Clues based off the number of letters.
   std::unordered_map<std::string, size_t> pos_map; ///< Map of words to their position ids.
+  std::array<word_list_t, NUM_IDS> next_words;     ///< Place to calculate map of results to next options
   word_list_t start_options;                       ///< Current options.
   size_t start_count;                              ///< Count of start options (cached)
 
@@ -304,15 +298,15 @@ public:
   }
 
   void CalculateNextWords(WordData & word_data) {
-    if (word_data.has_next_words) return;  // Already calculated!
-
     // Step through each possible result and determine what words that would leave.
     for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
       Result result(WORD_SIZE, result_id);
-      if (!result.IsValid(word_data.word)) continue;
-      word_data.next_words[result_id] = LimitWithGuess(word_data.word, ToResult(result_id));
+      if (!result.IsValid(word_data.word)) {
+        next_words[result_id].resize(0);
+      } else {
+        next_words[result_id] = LimitWithGuess(word_data.word, ToResult(result_id));
+      }
     }    
-    word_data.has_next_words = true;
   }
 
   void CalculateNextWords(size_t word_id) override {
@@ -331,8 +325,8 @@ public:
 
     // Scan through all of the possible result IDs.
     for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
-      if (guess.next_words[result_id].GetSize() == 0) continue;  // If next words was invalid, it's empty.
-      word_list_t next_options = guess.next_words[result_id] & cur_words;
+      if (next_words[result_id].GetSize() == 0) continue;  // If next words was invalid, it's empty.
+      word_list_t next_options = next_words[result_id] & cur_words;
       size_t num_options = next_options.CountOnes();
       if (num_options == 0) continue;                           // No words here; ignore.
       if (num_options > max_options) max_options = num_options; // Track maximum options.
@@ -341,8 +335,6 @@ public:
       if (p > 0.0) entropy -= p * std::log2(p);
     }
     
-    guess.ClearNextWords(); // We no longer need the next words!
-
     // Save all of the collected data.
     guess.max_options = max_options;
     guess.ave_options = static_cast<double>(total_options) / word_count;
@@ -517,13 +509,12 @@ public:
     CalculateNextWords(word_data);
     for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
       Result result(WORD_SIZE, result_id);
-      word_list_t result_words = word_data.next_words[result_id];
+      word_list_t result_words = next_words[result_id];
       std::cout << result_id << " - " << result.ToString() << " ";
       PrintWords(result_words, 10);
       total_count += result_words.CountOnes();
       std::cout << std::endl;
     }
-    word_data.ClearNextWords();
     std::cout << "Total Count: " << total_count << std::endl;
   }
 
@@ -588,7 +579,7 @@ public:
     // for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
     for (size_t result_id = NUM_IDS-1; result_id < NUM_IDS; --result_id) {
       Result result(WORD_SIZE, result_id);
-      word_list_t result_words = word.next_words[result_id];
+      word_list_t result_words = next_words[result_id];
 
       of << result.ToString(green, yellow, white) << " (" << result_words.CountOnes() << " words) : ";
 
@@ -598,8 +589,6 @@ public:
 
       of << "<br>\n";
     }
-    word.ClearNextWords();
-
 
     of << "</body>\n</html>\n";
 
