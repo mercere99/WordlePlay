@@ -66,6 +66,7 @@ private:
     size_t max_options = 0;     // Maximum number of word options after used as a guess.
     double ave_options = 0.0;   // Average number of options after used as a guess.
     double entropy = 0.0;       // What is the entropy (and thus information gained) for this choice?
+    Result max_result;          // Which result gives us the max options?
 
     WordStats() : word() { }
     WordStats(const std::string & in_word) : word(in_word) { }
@@ -319,6 +320,7 @@ public:
     size_t total_options = 0;
     double entropy = 0.0;
     const double word_count = static_cast<double>(cur_words.CountOnes());
+    Result max_result;
 
     // Make sure we have the needed next words.
     CalculateNextWords(guess);
@@ -329,7 +331,10 @@ public:
       word_list_t next_options = next_words[result_id] & cur_words;
       size_t num_options = next_options.CountOnes();
       if (num_options == 0) continue;                           // No words here; ignore.
-      if (num_options > max_options) max_options = num_options; // Track maximum options.
+      if (num_options > max_options) {
+        max_options = num_options; // Track maximum options.
+        max_result = Result(WORD_SIZE, result_id);
+      }
       total_options += num_options * num_options;               // Total gets added once per hit.
       double p = static_cast<double>(num_options) / word_count;
       if (p > 0.0) entropy -= p * std::log2(p);
@@ -339,11 +344,44 @@ public:
     guess.max_options = max_options;
     guess.ave_options = static_cast<double>(total_options) / word_count;
     guess.entropy = entropy;
+    guess.max_result = max_result;
   }
 
   void AnalyzeGuess(size_t word_id, const word_list_t & cur_words) override {
     AnalyzeGuess(words[word_id], cur_words);
   }
+
+
+  /// For solving absurdles...
+  void AnalyzeMaxPairs() {
+    size_t min_pair_max = 10000000;
+
+    for (size_t id1 = 0; id1 < words.size(); ++id1) {
+      WordData & word1 = words[id1];
+
+      std::cout << "Scanning '" << word1.word << "'..." << std::endl;
+
+      AnalyzeGuess(word1, start_options);
+
+      // Absurdle will always pick the result with the most options.
+      Result result1 = word1.max_result;
+      auto remaining_options = LimitWithGuess(word1.word, result1);
+
+      // Now try all possible second words.
+      for (size_t id2 = 0; id2 < words.size(); ++id2) {
+        if (id1 == id2) continue;
+        WordData & word2 = words[id2];
+        AnalyzeGuess(word2, remaining_options);
+
+        size_t pair_max = word2.max_options;
+        if (pair_max < min_pair_max) {
+          min_pair_max = pair_max;
+          std::cout << "New best: '" << word1.word << "' and '" << word2.word << "': " << pair_max << std::endl;
+        }
+      }
+    }
+  }
+
 
   bool Preprocess_SetupClues() {
     // std::cout << "Beginning pre-process phase..." << std::endl;
@@ -411,6 +449,7 @@ public:
 
     return true;
   }
+
 
   /// Return a value 0.0 to 100.0 indicating current progress.
   double GetProgress() const { return (pp_progress < 100.0) ? pp_progress : 100.0; }
