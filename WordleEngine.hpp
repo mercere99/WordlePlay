@@ -18,6 +18,7 @@
 #include "Result.hpp"
 #include "WordleEngineBase.hpp"
 
+#define STORE_NEXT_WORDS
 
 template <size_t WORD_SIZE=5>
 class WordleEngine : public WordleEngineBase {
@@ -25,6 +26,10 @@ private:
   static constexpr size_t MAX_LETTER_REPEAT = 4;
   static constexpr size_t NUM_IDS = Result::CalcNumIDs(WORD_SIZE);
   using word_list_t = emp::BitVector;
+
+#ifdef STORE_NEXT_WORDS
+  using next_words_t = std::array<word_list_t, NUM_IDS>;
+#endif
 
   // Get the ID (0-26) associated with a letter.
   static size_t ToID(char letter) {
@@ -83,6 +88,11 @@ private:
     emp::BitSet<26> multi_letters;  // What letters are in this word more than once?
 
     using WordStats::word;
+
+#ifdef STORE_NEXT_WORDS
+    next_words_t next_words;
+    bool has_next_words = false;
+#endif
 
     WordData(const std::string & in_word) : WordStats(in_word) {
       for (char x : word) {
@@ -299,6 +309,13 @@ public:
   }
 
   void CalculateNextWords(WordData & word_data) {
+#ifdef STORE_NEXT_WORDS
+    if (word_data.has_next_words) {
+      next_words = word_data.next_words;
+      return;
+    }
+#endif
+
     // Step through each possible result and determine what words that would leave.
     for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
       Result result(WORD_SIZE, result_id);
@@ -308,6 +325,10 @@ public:
         next_words[result_id] = LimitWithGuess(word_data.word, ToResult(result_id));
       }
     }    
+#ifdef STORE_NEXT_WORDS
+    word_data.next_words = next_words;
+    word_data.has_next_words = true;
+#endif
   }
 
   void CalculateNextWords(size_t word_id) override {
