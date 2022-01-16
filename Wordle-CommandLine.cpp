@@ -55,7 +55,7 @@ public:
       << "  Example: \"clue start EHNNN\" would indicate that there is an 's', but not at\n"
       << "           the front, a 't' second, no 'a's or 'r's, and no additional 't's.\n"
       << "Commands:\n"
-      << "   -analyze : show info about a given word.\n"
+      << "   analyze  : show info about a given word.\n"
       << "   clue     : provide a new clue and its result.\n"
       << "              format: clue [word] [result]\n"
       << "   dict     : list all words from the full dictionary.\n"
@@ -74,7 +74,12 @@ public:
 
   void PrintHelp(const std::string & term) {
     if (term == "analyze") {
-      std::cout << "The 'analyze' command is not yet implemented." << std::endl;
+      std::cout << "The 'analyze' command allows you to perform more intensive scans through words.\n"
+        << "Format: analyze [command]\n"
+        << "  [command] determines the specific analysis to perform.  Options are:\n"
+        << "            'pairs' to scan through data for all pairs of words.\n"
+        << "            (...more to come...)\n)"
+        << std::endl;
     } else if (term == "clue") {
       std::cout << "The 'clue' command provides a Wordle guess and result limiting words appropriately.\n"
         << "Format: clue [guess] [result]\n"
@@ -140,6 +145,17 @@ public:
       if (progress % 2 == 0) { std::cout << '#'; std::cout.flush(); }
     }
     std::cout << std::endl;
+  }
+
+  void CommandAnalyze(const std::string & mode) {
+    if (mode == "pairs" || mode == "p") {
+      // Loop through all word pairs, starting from early words.
+      for (size_t w1 = 0; w1 < word_set5.GetSize(); ++w1) {
+        word_set5.AnalyzeMaxPairs();
+      }
+      return;
+    }
+    Error("Unknown analyze mode '", mode, "'.");
   }
 
   void CommandClue(const std::string & clue_word, const std::string clue_result) {
@@ -225,7 +241,12 @@ public:
 
     if (args.size() == 0) return true;  // Empty line!
 
-    if (args[0] == "clue" || args[0] == "c") {
+    if (args[0] == "analyze" || args[0] == "a") {
+      if (args.size() != 2) Error("'analyze' requires specification of analyze mode.");
+      else CommandAnalyze(args[1]);
+    }
+
+    else if (args[0] == "clue" || args[0] == "c") {
       if (args.size() != 3) Error("'clue' command requires exactly two arguments.");
       else CommandClue(args[1], args[2]);
     }
