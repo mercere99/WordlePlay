@@ -176,13 +176,13 @@ public:
 
     void Write(std::size_t max_count, std::ostream & os=std::cout) const {
       for (size_t i = 0; i < max_count && i < words.size(); ++i) {
-        std::cout << words[i].word << ", "
-                  << words[i].ave_options << ", "
-                  << words[i].max_options << ", "
-                  << words[i].entropy << std::endl;
+        os << words[i].word << ", "
+           << words[i].ave_options << ", "
+           << words[i].max_options << ", "
+           << words[i].entropy << std::endl;
       }
       if (max_count < words.size()) {
-        std::cout << "...plus " << (words.size() - max_count) << " more." << std::endl;
+        os << "...plus " << (words.size() - max_count) << " more." << std::endl;
       }
     }
   };
