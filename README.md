@@ -1,4 +1,4 @@
-# Wordle
+# WordlePlay
 Analysis tools for Wordle puzzles
 
 Wordle-CommandLine provides a terminal-style interface to analyze Wordle puzzles.
