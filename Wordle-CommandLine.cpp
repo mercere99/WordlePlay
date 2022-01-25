@@ -19,9 +19,8 @@
 
 class WordleDriver {
 private:
-  size_t word_size = 5;
-
-  WordleEngine<5> word_set5;
+  size_t word_size;
+  WordleEngine word_set;
 
   struct Clue {
     std::string word;
@@ -41,7 +40,8 @@ private:
 
 public:
   WordleDriver()
-  : word_set5(wordlist5)
+  : word_size(5)
+  , word_set(wordlist5, word_size)
   {
 
   }
@@ -62,6 +62,8 @@ public:
       << "              format: dict [sort=alpha] [count=10] [output=screen]\n"
       << "   help     : Provide addition information about a command.\n"
       << "              format: help [command]\n"
+      << "   load     : load in a new dictionary\n"
+      << "              format: load [filename] [letters=5]\n"
       << "   quit     : exit the program.\n"
       << "   reset    : erase all current clues.\n"
       << "   status   : show the current clue stack.\n"
@@ -127,9 +129,9 @@ public:
     std::cout << "Processing...\n"
               << "------------------------------------------------------" << std::endl;
 
-    word_set5.ResetPreprocess();
-    while (!word_set5.Preprocess()) {
-      size_t progress = (size_t) word_set5.GetProgress();  // 0 to 100
+    word_set.ResetPreprocess();
+    while (!word_set.Preprocess()) {
+      size_t progress = (size_t) word_set.GetProgress();  // 0 to 100
       if (progress % 2 == 0) { std::cout << '#'; std::cout.flush(); }
     }
     std::cout << std::endl;
@@ -139,9 +141,9 @@ public:
     std::cout << "Processing...\n"
               << "------------------------------------------------------" << std::endl;
 
-    word_set5.ResetPreprocess();
-    while (!word_set5.Process()) {
-      size_t progress = (size_t) word_set5.GetProgress();  // 0 to 100
+    word_set.ResetPreprocess();
+    while (!word_set.Process()) {
+      size_t progress = (size_t) word_set.GetProgress();  // 0 to 100
       if (progress % 2 == 0) { std::cout << '#'; std::cout.flush(); }
     }
     std::cout << std::endl;
@@ -150,8 +152,8 @@ public:
   void CommandAnalyze(const std::string & mode) {
     if (mode == "pairs" || mode == "p") {
       // Loop through all word pairs, starting from early words.
-      for (size_t w1 = 0; w1 < word_set5.GetSize(); ++w1) {
-        word_set5.AnalyzeMaxPairs();
+      for (size_t w1 = 0; w1 < word_set.GetSize(); ++w1) {
+        word_set.AnalyzeMaxPairs();
       }
       return;
     }
@@ -173,11 +175,18 @@ public:
 
     CommandStatus();
 
-    word_set5.AddClue(clue_word, clue_result);
+    word_set.AddClue(clue_word, clue_result);
     Process();
-    std::cout << "There are " << word_set5.GetOptions().CountOnes()
-              << " possible words remaining (of " << word_set5.GetSize() << " total)."
+    std::cout << "There are " << word_set.GetOptions().CountOnes()
+              << " possible words remaining (of " << word_set.GetSize() << " total)."
               << std::endl;
+  }
+
+  void CommandLoad(const std::string & filename, size_t in_size) {
+    word_size = in_size;
+    word_set.SetWordSize(word_size);
+    word_set.Load(filename);
+    Preprocess();
   }
 
   void CommandStatus() {
@@ -203,7 +212,7 @@ public:
   }
 
   void CommandDict(const std::string & sort_type, size_t count, const std::string & output) {
-    auto out_words = word_set5.GetAllWords();
+    auto out_words = word_set.GetAllWords();
     if (out_words.Sort(sort_type) == false) {
       Error("Unknown sort type '", sort_type, "'.  Printing unsorted.");
     }
@@ -217,7 +226,7 @@ public:
   }
 
   void CommandWords(const std::string & sort_type, size_t count, const std::string & output) {
-    auto out_words = word_set5.GetWords();
+    auto out_words = word_set.GetWords();
     if (out_words.Sort(sort_type) == false) {
       Error("Unknown sort type '", sort_type, "'.  Printing unsorted.");
     }
@@ -268,12 +277,20 @@ public:
     //   clues.pop_back();
     // }
 
+    else if (args[0] == "load" || args[0] == "l") {
+      if (args.size() < 2) Error("'load' requires a filename.");
+      else {
+        size_t count = (args.size() > 2) ? std::stoul(args[2]) : 5;
+        CommandLoad(args[1], count);
+      }
+    }
+
     else if (args[0] == "quit" || args[0] == "exit" || args[0] == "q") return false;
 
     else if (args[0] == "reset" || args[0] == "r") {
       std::cout << "Clearing all current clues." << std::endl;
       clues.resize(0);
-      word_set5.ResetOptions();
+      word_set.ResetOptions();
       Process();
     }
 
@@ -296,7 +313,7 @@ public:
   void Start() {
     PrintHelp();
     Preprocess();
-    std::cout << "..." << word_set5.GetSize() << " words are analyzed; " << word_set5.GetNumResults() << " results each..." << std::endl;
+    std::cout << "..." << word_set.GetSize() << " words are analyzed; " << word_set.GetNumResults() << " results each..." << std::endl;
 
     // Collect inputs.
     while (ProcessCommandLine());  // Process the command line until it returns 'false'.
