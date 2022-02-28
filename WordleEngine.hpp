@@ -20,15 +20,13 @@
 
 #define STORE_NEXT_WORDS
 
-template <size_t WORD_SIZE=5>
 class WordleEngine : public WordleEngineBase {
 private:
   static constexpr size_t MAX_LETTER_REPEAT = 4;
-  static constexpr size_t NUM_IDS = Result::CalcNumIDs(WORD_SIZE);
   using word_list_t = emp::BitVector;
 
 #ifdef STORE_NEXT_WORDS
-  using next_words_t = std::array<word_list_t, NUM_IDS>;
+  using next_words_t = std::vector<word_list_t>;
 #endif
 
   // Get the ID (0-26) associated with a letter.
@@ -42,7 +40,7 @@ private:
     return static_cast<char>(id + 'a');
   }
 
-  static Result ToResult(size_t id) { return Result(WORD_SIZE, id); }
+  Result ToResult(size_t id) const { return Result(word_size, id); }
 
   // All of the clues for a given position.
   struct PositionClues {
@@ -108,11 +106,14 @@ private:
   //  DATA MEMBERS
   //////////////////////////////////////////////////////////////////////////////////////////
 
+  size_t word_size;
+  size_t num_ids;
+
   emp::vector<WordData> words;                     ///< Data about all words in this Wordle
-  emp::array<PositionClues, WORD_SIZE> pos_clues;  ///< A PositionClues object for each position.
+  emp::vector<PositionClues> pos_clues;            ///< A PositionClues object for each position.
   emp::array<LetterClues,26> let_clues;            ///< Clues based off the number of letters.
   std::unordered_map<std::string, size_t> pos_map; ///< Map of words to their position ids.
-  std::array<word_list_t, NUM_IDS> next_words;     ///< Place to calculate map of results to next options
+  std::vector<word_list_t> next_words;             ///< Place to calculate map of results to next options
   word_list_t start_options;                       ///< Current options.
   size_t start_count;                              ///< Count of start options (cached)
 
@@ -122,14 +123,33 @@ private:
   size_t pp_progress = 0;                          ///< Track how much progress we've made pre-processing.
 
 public:
-  WordleEngine() { }
-  WordleEngine(const emp::vector<std::string> & in_words) {
+  WordleEngine(size_t _word_size)
+  : word_size(_word_size)
+  , num_ids(Result::CalcNumIDs(_word_size))
+  , pos_clues(word_size)
+  , next_words(num_ids)
+  { }
+  WordleEngine(const emp::vector<std::string> & in_words, size_t _word_size)
+  : word_size(_word_size)
+  , num_ids(Result::CalcNumIDs(_word_size))
+  , pos_clues(word_size)
+  , next_words(num_ids)
+  {
     Load(in_words);
   }
 
   size_t GetSize() const { return words.size(); }
-  static constexpr size_t GetNumResults() { return NUM_IDS; }
+  size_t GetNumResults() const { return num_ids; }
    const word_list_t & GetOptions() { return start_options; }
+
+  void SetWordSize(size_t in_size) {
+    word_size = in_size;
+    num_ids = Result::CalcNumIDs(word_size);
+    pos_clues.resize(word_size);
+    next_words.clear();
+    next_words.resize(num_ids);
+    words.clear();
+  }
 
   void AddClue(const std::string & in_word, Result in_result) {
     start_options = LimitWithGuess(in_word, in_result);
@@ -218,7 +238,7 @@ public:
     size_t dup_count = 0;
     for (const std::string & in_word : in_words) {
       // Only keep words of the correct size and all lowercase.
-      if (in_word.size() != WORD_SIZE) { wrong_size_count++; continue; }
+      if (in_word.size() != word_size) { wrong_size_count++; continue; }
       if (!emp::is_lower(in_word)) { invalid_char_count++; continue; }
       if (emp::Has(pos_map, in_word)) { dup_count++; continue; }
       AddWord(in_word);
@@ -273,7 +293,7 @@ public:
     emp::BitSet<26> letter_fail;
 
     // First add letter clues and collect letter information.
-    for (size_t i = 0; i < WORD_SIZE; ++i) {
+    for (size_t i = 0; i < word_size; ++i) {
       const size_t cur_letter = ToID(guess[i]);
       if (result[i] == Result::HERE) {
         word_options &= pos_clues[i].here[cur_letter];
@@ -317,8 +337,8 @@ public:
 #endif
 
     // Step through each possible result and determine what words that would leave.
-    for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
-      Result result(WORD_SIZE, result_id);
+    for (size_t result_id = 0; result_id < num_ids; ++result_id) {
+      Result result(word_size, result_id);
       if (!result.IsValid(word_data.word)) {
         next_words[result_id].resize(0);
       } else {
@@ -347,14 +367,14 @@ public:
     CalculateNextWords(guess);
 
     // Scan through all of the possible result IDs.
-    for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
+    for (size_t result_id = 0; result_id < num_ids; ++result_id) {
       if (next_words[result_id].GetSize() == 0) continue;  // If next words was invalid, it's empty.
       word_list_t next_options = next_words[result_id] & cur_words;
       size_t num_options = next_options.CountOnes();
       if (num_options == 0) continue;                           // No words here; ignore.
       if (num_options > max_options) {
         max_options = num_options; // Track maximum options.
-        max_result = Result(WORD_SIZE, result_id);
+        max_result = Result(word_size, result_id);
       }
       total_options += num_options * num_options;               // Total gets added once per hit.
       double p = static_cast<double>(num_options) / word_count;
@@ -408,7 +428,7 @@ public:
     // std::cout << "Beginning pre-process phase..." << std::endl;
 
     // Setup all position clue info to know the number of words.
-    for (size_t i=0; i < WORD_SIZE; ++i) {
+    for (size_t i=0; i < word_size; ++i) {
       pos_clues[i].pos = i;
       pos_clues[i].SetNumWords(words.size());
     }
@@ -535,7 +555,7 @@ public:
     const PositionClues & clue = pos_clues[pos];
     std::cout << "Position " << pos << ":\n";
     for (uint8_t i = 0; i < 26; ++i) {
-      std::cout << " '" << clue.let << "' : ";
+      std::cout << " '" << ToLetter(i) << "' : ";
       PrintWords(clue.here[i], 10);
       std::cout << std::endl;
     }
@@ -556,7 +576,7 @@ public:
     }
   }
 
-  void PrintWordData(const WordData & word_data) const {
+  void PrintWordData(WordData & word_data) {
     std::cout << "WORD:     " << word_data.word << std::endl;
     std::cout << "Letters:  " << word_data.letters << std::endl;
     std::cout << "Multi:    " << word_data.multi_letters << std::endl;
@@ -567,8 +587,8 @@ public:
 
     size_t total_count = 0;
     CalculateNextWords(word_data);
-    for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
-      Result result(WORD_SIZE, result_id);
+    for (size_t result_id = 0; result_id < num_ids; ++result_id) {
+      Result result(word_size, result_id);
       word_list_t result_words = next_words[result_id];
       std::cout << result_id << " - " << result.ToString() << " ";
       PrintWords(result_words, 10);
@@ -578,7 +598,7 @@ public:
     std::cout << "Total Count: " << total_count << std::endl;
   }
 
-  void PrintWordData(size_t id) const { PrintWordData(words[id]); }
+  void PrintWordData(size_t id) { PrintWordData(words[id]); }
   void PrintWordData(const std::string & word) {
     PrintWordData(words[pos_map[word]]);
   }
@@ -617,7 +637,7 @@ public:
   }
 
   /// Print out all words as HTML.
-  void PrintHTMLWord(const WordData & word) const {
+  void PrintHTMLWord(WordData & word) {
     std::string filename = emp::to_string("web/words/", word.word, ".html");
     std::ofstream of(filename);
 
@@ -637,8 +657,8 @@ public:
     // Loop through all possible results.
     CalculateNextWords(word);
     // for (size_t result_id = 0; result_id < NUM_IDS; ++result_id) {
-    for (size_t result_id = NUM_IDS-1; result_id < NUM_IDS; --result_id) {
-      Result result(WORD_SIZE, result_id);
+    for (size_t result_id = num_ids-1; result_id < num_ids; --result_id) {
+      Result result(word_size, result_id);
       word_list_t result_words = next_words[result_id];
 
       of << result.ToString(green, yellow, white) << " (" << result_words.CountOnes() << " words) : ";
@@ -655,7 +675,7 @@ public:
     std::cout << "Printed file '" << filename << "'." << std::endl;
   }
 
-  void PrintHTMLWordID(int id) const { PrintHTMLWord(words[(size_t) id]); }
+  void PrintHTMLWordID(int id) { PrintHTMLWord(words[(size_t) id]); }
   void PrintHTMLWord(const std::string & word) {
     PrintHTMLWord(words[pos_map[word]]);
   }
