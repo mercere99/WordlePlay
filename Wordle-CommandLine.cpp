@@ -55,7 +55,6 @@ public:
       << "  Example: \"clue start EHNNN\" would indicate that there is an 's', but not at\n"
       << "           the front, a 't' second, no 'a's or 'r's, and no additional 't's.\n"
       << "Commands:\n"
-      << "   analyze  : show info about a given word.\n"
       << "   clue     : provide a new clue and its result.\n"
       << "              format: clue [word] [result]\n"
       << "   dict     : list all words from the full dictionary.\n"
@@ -64,12 +63,14 @@ public:
       << "              format: help [command]\n"
       << "   load     : load in a new dictionary\n"
       << "              format: load [filename] [letters=5]\n"
+      << "   pop      : remove most recently added clue.\n"
       << "   quit     : exit the program.\n"
       << "   reset    : erase all current clues.\n"
       << "   status   : show the current clue stack.\n"
       << "   words    : list top legal words (type 'help words' for full information).\n"
       << "              format: words [sort=alpha] [count=10] [output=screen]\n"
       << "All commands can be shortened to just their first letter.\n"
+      << "(Commands under development: 'analyze'\n)"
       << std::endl;
     ;
   }
@@ -199,9 +200,9 @@ public:
       std::cout << "  [" << clue_id << "] : ";
       for (size_t let_id = 0; let_id < word_size; ++let_id) {
         switch (clues[clue_id].result[let_id]) {
-          case Result::HERE:      std::cout << emp::ANSI_Green()  << emp::ANSI_BlackBG(); break;
-          case Result::ELSEWHERE: std::cout << emp::ANSI_Yellow() << emp::ANSI_BlackBG(); break;
-          case Result::NOWHERE:   std::cout << emp::ANSI_Black()  << emp::ANSI_WhiteBG(); break;
+          case Result::HERE:      std::cout << emp::ANSI_Black()  << emp::ANSI_GreenBG(); break;
+          case Result::ELSEWHERE: std::cout << emp::ANSI_Black()  << emp::ANSI_YellowBG(); break;
+          case Result::NOWHERE:   std::cout << emp::ANSI_White()  << emp::ANSI_BlackBG(); break;
           case Result::NONE:      std::cout << emp::ANSI_Red()    << emp::ANSI_BlackBG(); break;
         }
         std::cout << clues[clue_id].word[let_id];
@@ -272,16 +273,24 @@ public:
       else PrintHelp(args[1]);
     }
 
-    // else if (args[0] == "pop" || args[0] == "p") {
-    //   if (clues.size() == 0) Error("No clues available; pop failed.");
-    //   clues.pop_back();
-    // }
-
     else if (args[0] == "load" || args[0] == "l") {
       if (args.size() < 2) Error("'load' requires a filename.");
       else {
         size_t count = (args.size() > 2) ? std::stoul(args[2]) : 5;
         CommandLoad(args[1], count);
+      }
+    }
+
+    else if (args[0] == "pop" || args[0] == "p") {
+      if (clues.size() == 0) Error("Error: No clues to pop.");
+      else {
+	std::cout << "Regenerating results without final clue." << std::endl;
+	clues.pop_back();                           // Remove last clue.
+	word_set.ResetOptions();                    // Reset available words.
+	for (auto clue : clues) {                   // Add remaining clues.
+	  word_set.AddClue(clue.word, clue.result);
+	}
+	Process();	                            // Identify current options.
       }
     }
 
