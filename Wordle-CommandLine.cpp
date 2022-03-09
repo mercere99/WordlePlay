@@ -7,8 +7,6 @@
  */
 
 #include "emp/base/vector.hpp"
-//#include "emp/datastructs/vector_utils.hpp"
-//#include "emp/math/Random.hpp"
 #include "emp/tools/string_utils.hpp"
 
 #include "Result.hpp"
@@ -130,34 +128,23 @@ public:
     std::cout << "Processing...\n"
               << "------------------------------------------------------" << std::endl;
 
-    word_set.ResetPreprocess();
-    while (!word_set.Preprocess()) {
-      size_t progress = (size_t) word_set.GetProgress();  // 0 to 100
-      if (progress % 2 == 0) { std::cout << '#'; std::cout.flush(); }
-    }
+    word_set.Preprocess();
+    // while (!word_set.Preprocess()) {
+    //   size_t progress = (size_t) word_set.GetProgress();  // 0 to 100
+    //   if (progress % 2 == 0) { std::cout << '#'; std::cout.flush(); }
+    // }
     std::cout << std::endl;
   }
 
-  void Process() {
-    std::cout << "Processing...\n"
-              << "------------------------------------------------------" << std::endl;
-
-    word_set.ResetPreprocess();
-    while (!word_set.Process()) {
-      size_t progress = (size_t) word_set.GetProgress();  // 0 to 100
-      if (progress % 2 == 0) { std::cout << '#'; std::cout.flush(); }
-    }
-    std::cout << std::endl;
-  }
-
+ 
   void CommandAnalyze(const std::string & mode) {
-    if (mode == "pairs" || mode == "p") {
-      // Loop through all word pairs, starting from early words.
-      for (size_t w1 = 0; w1 < word_set.GetSize(); ++w1) {
-        word_set.AnalyzeMaxPairs();
-      }
-      return;
-    }
+    // if (mode == "pairs" || mode == "p") {
+    //   // Loop through all word pairs, starting from early words.
+    //   for (size_t w1 = 0; w1 < word_set.GetSize(); ++w1) {
+    //     word_set.AnalyzeMaxPairs();
+    //   }
+    //   return;
+    // }
     Error("Unknown analyze mode '", mode, "'.");
   }
 
@@ -177,8 +164,8 @@ public:
     CommandStatus();
 
     word_set.AddClue(clue_word, clue_result);
-    Process();
-    std::cout << "There are " << word_set.GetOptions().CountOnes()
+
+    std::cout << "There are " << word_set.GetOptions().size()
               << " possible words remaining (of " << word_set.GetSize() << " total)."
               << std::endl;
   }
@@ -213,29 +200,29 @@ public:
   }
 
   void CommandDict(const std::string & sort_type, size_t count, const std::string & output) {
-    auto out_words = word_set.GetAllWords();
-    if (out_words.Sort(sort_type) == false) {
+    auto out_words = word_set.GetAllOptions();
+    if (word_set.SortWords(out_words, sort_type) == false) {
       Error("Unknown sort type '", sort_type, "'.  Printing unsorted.");
     }
 
-    if (output == "screen") out_words.Write(count);
+    if (output == "screen") word_set.WriteWords(out_words, count);
     else {
       std::ofstream of(output);
-      out_words.Write(count, of);
+      word_set.WriteWords(out_words, count, of);
       of.close();
     }
   }
 
   void CommandWords(const std::string & sort_type, size_t count, const std::string & output) {
-    auto out_words = word_set.GetWords();
-    if (out_words.Sort(sort_type) == false) {
+    auto out_words = word_set.GetOptions();
+    if (word_set.SortWords(out_words, sort_type) == false) {
       Error("Unknown sort type '", sort_type, "'.  Printing unsorted.");
     }
 
-    if (output == "screen") out_words.Write(count);
+    if (output == "screen") word_set.WriteWords(out_words, count);
     else {
       std::ofstream of(output);
-      out_words.Write(count, of);
+      word_set.WriteWords(out_words, count, of);
       of.close();
     }
   }
@@ -284,13 +271,12 @@ public:
     else if (args[0] == "pop" || args[0] == "p") {
       if (clues.size() == 0) Error("Error: No clues to pop.");
       else {
-	std::cout << "Regenerating results without final clue." << std::endl;
-	clues.pop_back();                           // Remove last clue.
-	word_set.ResetOptions();                    // Reset available words.
-	for (auto clue : clues) {                   // Add remaining clues.
-	  word_set.AddClue(clue.word, clue.result);
-	}
-	Process();	                            // Identify current options.
+        std::cout << "Regenerating results without final clue." << std::endl;
+        clues.pop_back();                           // Remove last clue.
+        word_set.ResetOptions();                    // Reset available words.
+        for (auto clue : clues) {                   // Add remaining clues.
+          word_set.AddClue(clue.word, clue.result);
+        }
       }
     }
 
@@ -300,7 +286,6 @@ public:
       std::cout << "Clearing all current clues." << std::endl;
       clues.resize(0);
       word_set.ResetOptions();
-      Process();
     }
 
     else if (args[0] == "status" || args[0] == "s") {
