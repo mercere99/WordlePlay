@@ -121,6 +121,12 @@ public:
   }
 };
 
+struct GroupStats {
+  size_t max_options = 0;
+  double ave_options = 0.0;
+  double entropy = 0.0;
+};
+
 struct IDGroups {
   emp::vector<uint16_t> ids;
   emp::vector<uint16_t> starts;
@@ -141,6 +147,20 @@ struct IDGroups {
     auto start_id = starts[group_id];
     auto end_id = (group_id+1 < starts.size()) ? starts[group_id+1] : ids.size();
     return IDSet(ids, start_id, end_id, true);
+  }
+
+  GroupStats CalcStats() {
+    GroupStats out_stats;
+    size_t num_options = 0;
+    double total = 0.0;
+    for (size_t end_id = 1; end_id < starts.size(); ++end_id) {
+      size_t cur_size = starts[end_id] - starts[end_id-1];
+      if (cur_size > out_stats.max_options) out_stats.max_options = cur_size;
+      num_options += cur_size;
+      total += cur_size * cur_size;
+    }
+    out_stats.ave_options = total / (double) num_options;
+    return out_stats;
   }
 };
 
@@ -176,38 +196,20 @@ private:
     std::array<IDSet, MAX_LETTER_REPEAT+1> exactly;  ///< Are there exactly x instances of letter?
   };
 
-  struct WordStats {
+  struct WordData {
     std::string word;
-    size_t max_options = 0;     // Maximum number of word options after used as a guess.
-    double ave_options = 0.0;   // Average number of options after used as a guess.
-    double entropy = 0.0;       // What is the entropy (and thus information gained) for this choice?
-    Result max_result;          // Which result gives us the max options?
-
-    WordStats() { }
-    WordStats(const std::string & in_word) : word(in_word) { }
-    WordStats(const WordStats &) = default;
-    WordStats(WordStats &&) = default;
-
-    WordStats & operator=(const WordStats &) = default;
-    WordStats & operator=(WordStats &&) = default;
-  };
-
-  struct WordData : public WordStats {
-    // Pre=processed data
-    emp::array<uint8_t, 26> let_count;
-
-    using WordStats::word;
+    GroupStats stats;
     IDGroups next_words;   // What words will each clue lead to?
 
-    WordData(const std::string & in_word) : WordStats(in_word) {
-      for (auto & x : let_count) x = 0;
-      for (char x : word) {
-        size_t let_id = ToID(x);
-        ++let_count[let_id];
-      }
-    }
+    WordData() { }
+    WordData(const std::string & in_word) : word(in_word) { }
+    WordData(const WordData &) = default;
+    WordData(WordData &&) = default;
 
+    WordData & operator=(const WordData &) = default;
+    WordData & operator=(WordData &&) = default;
   };
+
 
   //////////////////////////////////////////////////////////////////////////////////////////
   //  DATA MEMBERS for WorldEngine
@@ -219,8 +221,14 @@ private:
   emp::vector<WordData> words;                     ///< Data about all words in this Wordle
   emp::vector<PositionClues> pos_clues;            ///< A PositionClues object for each position.
   emp::array<LetterClues,26> let_clues;            ///< Clues based off the number of letters.
-  std::unordered_map<std::string, size_t> id_map; ///< Map of words to their position ids.
+  std::unordered_map<std::string, size_t> id_map;  ///< Map of words to their position ids.
   IDSet cur_options;                               ///< Current word options.
+
+  // Pre-process status
+  bool clues_ok = true    ;    // Do the clues have associated words?
+  bool words_ok = true;        // Do the words have associated result groups?
+  bool stats_ok = true;        // Do the words have associated stats?
+  size_t words_processed = 0;  // Track how many words are done...
 
 public:
   WordleEngine(size_t _word_size)
@@ -251,59 +259,60 @@ public:
     size_t word_id = id_map[word];
     const auto & word_data = words[word_id];
     cur_options &= word_data.next_words.GetGroup(result.GetID());
+    stats_ok = false;
   }
 
   bool SortWords(IDSet & ids, const std::string & sort_type="alpha") const {
     if (sort_type == "max") {
       ids.Sort( [this](uint16_t id1, uint16_t id2) {
-        const WordStats & w1 = words[id1];
-        const WordStats & w2 = words[id2];
+        const auto & w1 = words[id1].stats;
+        const auto & w2 = words[id2].stats;
         if (w1.max_options == w2.max_options) return w1.ave_options < w2.ave_options; // tiebreak
         return w1.max_options < w2.max_options;
       } );
     } else if (sort_type == "ave") {
       ids.Sort( [this](uint16_t id1, uint16_t id2) {
-        const WordStats & w1 = words[id1];
-        const WordStats & w2 = words[id2];
+        const auto & w1 = words[id1].stats;
+        const auto & w2 = words[id2].stats;
         if (w1.ave_options == w2.ave_options) return w1.max_options < w2.max_options; // tiebreak
         return w1.ave_options < w2.ave_options;
       } );
     } else if (sort_type == "info") {
       ids.Sort( [this](uint16_t id1, uint16_t id2) {
-        const WordStats & w1 = words[id1];
-        const WordStats & w2 = words[id2];
+        const auto & w1 = words[id1].stats;
+        const auto & w2 = words[id2].stats;
         return w1.entropy > w2.entropy;
       } );
     } else if (sort_type == "alpha") {
       ids.Sort( [this](uint16_t id1, uint16_t id2) {
-        const WordStats & w1 = words[id1];
-        const WordStats & w2 = words[id2];
+        const auto & w1 = words[id1];
+        const auto & w2 = words[id2];
         return w1.word < w2.word;
       } );
     } else if (sort_type == "r-max") {
       ids.Sort( [this](uint16_t id1, uint16_t id2) {
-        const WordStats & w1 = words[id1];
-        const WordStats & w2 = words[id2];
+        const auto & w1 = words[id1].stats;
+        const auto & w2 = words[id2].stats;
         if (w1.max_options == w2.max_options) return w1.ave_options > w2.ave_options; // tiebreak
         return w1.max_options > w2.max_options;
       } );
     } else if (sort_type == "r-ave") {
       ids.Sort( [this](uint16_t id1, uint16_t id2) {
-        const WordStats & w1 = words[id1];
-        const WordStats & w2 = words[id2];
+        const auto & w1 = words[id1].stats;
+        const auto & w2 = words[id2].stats;
         if (w1.ave_options == w2.ave_options) return w1.max_options > w2.max_options; // tiebreak
         return w1.ave_options > w2.ave_options;
       } );
     } else if (sort_type == "r-info") {
       ids.Sort( [this](uint16_t id1, uint16_t id2) {
-        const WordStats & w1 = words[id1];
-        const WordStats & w2 = words[id2];
+        const auto & w1 = words[id1].stats;
+        const auto & w2 = words[id2].stats;
         return w1.entropy < w2.entropy;
       } );
     } else if (sort_type == "r-alpha") {
       ids.Sort( [this](uint16_t id1, uint16_t id2) {
-        const WordStats & w1 = words[id1];
-        const WordStats & w2 = words[id2];
+        const auto & w1 = words[id1];
+        const auto & w2 = words[id2];
         return w1.word > w2.word;
       } );
     }
@@ -323,9 +332,9 @@ public:
       size_t id = ids[i];
       os << words[id].word;
       if (extra_data) {
-        os << col_break << words[id].ave_options
-          << col_break << words[id].max_options
-          << col_break << words[id].entropy;
+        os << col_break << words[id].stats.ave_options
+          << col_break << words[id].stats.max_options
+          << col_break << words[id].stats.entropy;
       }
       os << line_break;
     }
@@ -367,6 +376,10 @@ public:
                 << std::endl;
     }
 
+    clues_ok = false;
+    words_ok = false;
+    stats_ok = false;
+
     std::cout << "Loaded " << words.size() << " valid words." << std::endl;
   }
 
@@ -384,6 +397,8 @@ public:
 
   // Identify which words satisfy each clue.
   bool PreprocessClues() {
+    std::cout << "Processing Clues!" << std::endl;
+
     for (size_t i=0; i < word_size; ++i) { pos_clues[i].pos = i; }
     for (size_t let=0; let < 26; let++) { let_clues[let].letter = let; }
 
@@ -413,6 +428,8 @@ public:
         pos_clues[pos].here[cur_letter].Add(word_id);
       }
     }
+
+    clues_ok = true;
 
     return true;
   }
@@ -463,8 +480,12 @@ public:
   
   /// Analyze the current set of words and store result groups for each one.
   void PreprocessWords() {
-    for (size_t id = 0; id < words.size(); ++id) {
-      WordData & word_data = words[id];
+    if (words_processed == 0) std::cout << "Processing Words!" << std::endl;
+
+    size_t cur_process = 0;  // Track how many words we've processed THIS time through.
+
+    while (words_processed < words.size()) {
+      WordData & word_data = words[words_processed++];
 
       IDSet result_words;
 
@@ -477,13 +498,29 @@ public:
         }
         word_data.next_words.AddGroup(result_words);
       }
+
+      if (++cur_process >= 100) return;
     }
+
+    words_processed = 0; // Reset words processed for next time.
+    words_ok = true;     // Do the words have associated result groups?
+  }
+
+  /// Loop through all words and update their stats.
+  void PreprocessStats() {
+    std::cout << "Processing Stats!" << std::endl;
+    for (auto & word_data : words) {
+      word_data.stats = word_data.next_words.CalcStats();
+    }
+    stats_ok = true;
   }
 
   /// Handle all of the needed preprocessing.
-  void Preprocess() {
-    PreprocessClues();
-    PreprocessWords();
+  bool Preprocess() {
+    if (!clues_ok) { PreprocessClues(); return false; }
+    if (!words_ok) { PreprocessWords(); return false; }
+    if (!stats_ok) { PreprocessStats(); return false; }
+    return true;
   }
 
 
