@@ -8,10 +8,11 @@
 
 class Result {
 public:
+  static constexpr size_t MAX_WORD_SIZE = 15;
   enum PositionResult { NOWHERE, ELSEWHERE, HERE, NONE };
 
   // Return the number of IDs for a given length result.
-  static constexpr size_t CalcNumIDs(size_t result_size) { return emp::Pow(3, result_size); }
+  static constexpr size_t CalcNumIDs(size_t result_size) { return emp::Pow<size_t>(3, result_size); }
 
 private:
   using results_t = emp::vector<PositionResult>;
@@ -21,8 +22,9 @@ private:
 
   /// Return a result array where each index is an associated (unique) possible result set.
   static const results_t & LookupResult(const size_t result_size, const size_t result_id) {
-    constexpr size_t MAX_WORD_SIZE = 15;
-    emp_assert(result_size < MAX_WORD_SIZE);
+    emp_assert( result_size < MAX_WORD_SIZE );
+    emp_assert( result_id < CalcNumIDs(result_size) );
+
     static emp::array< emp::vector<results_t>, MAX_WORD_SIZE > result_matrix;
 
     emp::vector<results_t> & result_vector = result_matrix[result_size];
@@ -48,9 +50,11 @@ private:
 
   /// Assume that we have results, calculate the associated ID.
   void CalcID() {
+    emp_assert(results.size() > 0 && results.size() < MAX_WORD_SIZE, results.size());
     size_t base = 1;
     id = 0;
     for (PositionResult r : results) { id += static_cast<size_t>(r) * base; base *= 3; }
+    emp_assert(id < CalcNumIDs(results.size()), id);
   }
 
   /// Assume that we have an ID, lookup the correct results.
@@ -77,7 +81,10 @@ public:
   Result() : id(0) {}
 
   /// Create a result by id.
-  Result(size_t result_size, size_t _id) : id(_id) { CalcResults(result_size); }
+  Result(size_t result_size, size_t _id) : id(_id) { 
+    emp_assert( id < CalcNumIDs(result_size), id );
+    CalcResults(result_size);
+  }
 
   /// Create a result by a result array.
   Result(const results_t & _results) : results(_results) { CalcID(); }
