@@ -54,6 +54,16 @@ public:
 
   void Clear() { ids.resize(0); sorted=true; }
 
+  void Copy(const emp::vector<uint16_t> & _ids,
+            size_t start_id,
+            size_t end_id,
+            bool _sorted=false)
+  {
+    ids.resize(0);
+    std::copy(_ids.begin()+start_id, _ids.begin()+end_id, ids.begin());
+    sorted = _sorted;
+  }
+
   void Add(uint16_t id) {
     if (ids.size() && ids.back() >= id) sorted = false;
     ids.push_back(id);
@@ -149,17 +159,45 @@ struct IDGroups {
     return IDSet(ids, start_id, end_id, true);
   }
 
+  /// A faster (?) GetGroup that does not require a new allocation.
+  void GetGroup(IDSet & out_set, size_t group_id) const {
+    auto start_id = starts[group_id];
+    auto end_id = (group_id+1 < starts.size()) ? starts[group_id+1] : ids.size();
+    return out_set.Copy(ids, start_id, end_id, true);
+  }
+
   GroupStats CalcStats() {
     GroupStats out_stats;
-    size_t num_options = 0;
     double total = 0.0;
-    for (size_t end_id = 1; end_id < starts.size(); ++end_id) {
-      size_t cur_size = starts[end_id] - starts[end_id-1];
+    for (size_t start_id = 0; start_id < starts.size(); ++start_id) {
+      const size_t start_pos = starts[start_id];
+      const size_t end_pos = (start_id+1 < starts.size()) ? starts[start_id+1] : ids.size();
+      size_t cur_size = end_pos - start_pos;
       if (cur_size > out_stats.max_options) out_stats.max_options = cur_size;
-      num_options += cur_size;
       total += cur_size * cur_size;
+      double p = static_cast<double>(cur_size) / ids.size();
+      if (p > 0.0) out_stats.entropy -= p * std::log2(p);
     }
-    out_stats.ave_options = total / (double) num_options;
+    out_stats.ave_options = total / (double) ids.size();
+    return out_stats;
+  }
+
+  /// Calculate stats just for words in the filter set.
+  GroupStats CalcStats(const IDSet & filter_set) {
+    GroupStats out_stats;
+    IDSet result_group;
+
+    double total = 0.0;
+    for (size_t start_id = 0; start_id < starts.size(); ++start_id) {
+      GetGroup(result_group, start_id);
+      result_group &= filter_set;
+      const size_t cur_size = result_group.size();
+      if (cur_size > out_stats.max_options) out_stats.max_options = cur_size;
+      total += cur_size * cur_size;
+      double p = static_cast<double>(cur_size) / filter_set.size();
+      if (p > 0.0) out_stats.entropy -= p * std::log2(p);
+    }
+    out_stats.ave_options = total / (double) filter_set.size();
     return out_stats;
   }
 };
@@ -509,8 +547,15 @@ public:
   /// Loop through all words and update their stats.
   void PreprocessStats() {
     std::cout << "Processing Stats!" << std::endl;
-    for (auto & word_data : words) {
-      word_data.stats = word_data.next_words.CalcStats();
+    // If we are not limiting the words, this can go fast...
+    if (cur_options.size() == words.size()) {
+      for (auto & word_data : words) {
+        word_data.stats = word_data.next_words.CalcStats();
+      }
+    } else {
+      for (auto & word_data : words) {
+        word_data.stats = word_data.next_words.CalcStats(cur_options);
+      }
     }
     stats_ok = true;
   }
