@@ -74,6 +74,7 @@ private:
         results[i] = NONE;
       };
     }
+    CalcID();
   }
 
 public:
