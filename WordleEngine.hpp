@@ -24,7 +24,7 @@ private:
 public:
   IDSet() { }
   IDSet(size_t count) { SetAll(count); }
-  IDSet(const emp::vector<uint16_t> & _ids, size_t start_id, size_t end_id, bool _sorted=false)
+  IDSet(const emp::vector<uint16_t> & _ids, int start_id, int end_id, bool _sorted=false)
     : ids(_ids.begin()+start_id, _ids.begin()+end_id), sorted(_sorted)
     { }
   IDSet(const IDSet &) = default;
@@ -55,8 +55,8 @@ public:
   void Clear() { ids.resize(0); sorted=true; }
 
   void Copy(const emp::vector<uint16_t> & _ids,
-            size_t start_id,
-            size_t end_id,
+            int start_id,
+            int end_id,
             bool _sorted=false)
   {
     ids.resize(0);
@@ -124,7 +124,8 @@ public:
 
     // Any leftovers in the main list should be kept, remove all else.
     if (keep_count != this_next) {
-      ids.erase(ids.begin()+keep_count, ids.begin()+this_next);
+      ids.erase(ids.begin()+static_cast<int>(keep_count),
+                ids.begin()+static_cast<int>(this_next));
     }
 
     return *this;
@@ -149,20 +150,21 @@ struct IDGroups {
   IDGroups & operator=(IDGroups &&) = default;
 
   void AddGroup(const IDSet & new_group) {
-    starts.push_back(ids.size());
+    starts.push_back((uint16_t) ids.size());
     ids.insert(ids.end(), new_group.begin(), new_group.end());
   }
 
   IDSet GetGroup(size_t group_id) const {
-    auto start_id = starts[group_id];
-    auto end_id = (group_id+1 < starts.size()) ? starts[group_id+1] : ids.size();
+    emp_assert(group_id < starts.size(), group_id, starts.size());
+    int start_id = starts[group_id];
+    int end_id = (group_id+1 < starts.size()) ? starts[group_id+1] : static_cast<int>(ids.size());
     return IDSet(ids, start_id, end_id, true);
   }
 
   /// A faster (?) GetGroup that does not require a new allocation.
   void GetGroup(IDSet & out_set, size_t group_id) const {
-    auto start_id = starts[group_id];
-    auto end_id = (group_id+1 < starts.size()) ? starts[group_id+1] : ids.size();
+    int start_id = starts[group_id];
+    int end_id = (group_id+1 < starts.size()) ? starts[group_id+1] : static_cast<int>(ids.size());
     return out_set.Copy(ids, start_id, end_id, true);
   }
 
@@ -207,9 +209,9 @@ private:
   static constexpr size_t MAX_LETTER_REPEAT = 4;
 
   // Get the ID (0-25) associated with a letter.
-  static size_t ToID(char letter) {
-    if (letter >= 'a' && letter <= 'z') return static_cast<size_t>(letter - 'a');
-    if (letter >= 'A' && letter <= 'Z') return static_cast<size_t>(letter - 'A');
+  static uint16_t ToID(char letter) {
+    if (letter >= 'a' && letter <= 'z') return static_cast<uint16_t>(letter - 'a');
+    if (letter >= 'A' && letter <= 'Z') return static_cast<uint16_t>(letter - 'A');
     emp_error("Character is not a letter: ", letter);
     return 26;
   }
@@ -298,6 +300,7 @@ public:
     const auto & word_data = words[word_id];
     cur_options &= word_data.next_words.GetGroup(result.GetID());
     stats_ok = false;
+    Process();
   }
 
   bool SortWords(IDSet & ids, const std::string & sort_type="alpha") const {
@@ -434,7 +437,7 @@ public:
   }
 
   // Identify which words satisfy each clue.
-  bool PreprocessClues() {
+  bool ProcessClues() {
     std::cout << "Processing Clues!" << std::endl;
 
     for (size_t i=0; i < word_size; ++i) { pos_clues[i].pos = i; }
@@ -444,8 +447,8 @@ public:
     emp::array<uint8_t, 26> letter_counts;
 
     // Loop through each word, indicating which clues it is consistent with.
-    for (size_t word_id = 0; word_id < words.size(); ++word_id) {
-      const std::string & word = words[word_id].word;
+    for (uint16_t word_id = 0; word_id < words.size(); ++word_id) {
+      const std::string & word = words[(size_t) word_id].word;
 
       // Figure out which letters are in this word.
       std::fill(letter_counts.begin(), letter_counts.end(), 0);      // Reset counters to zero.
@@ -478,7 +481,7 @@ public:
   //       - Make words options static to prevent memory allocation.
   //       - Figure out all incluse/exclude ID sets and run through them from smallest.
   //       - Speed up intersection and subtraction when Set sizes are very different.
-  IDSet PreprocessResultGroup(const std::string & guess, const Result & result) {
+  IDSet ProcessResultGroup(const std::string & guess, const Result & result) {
     emp::array<uint8_t, 26> letter_counts;
     std::fill(letter_counts.begin(), letter_counts.end(), 0);
     emp::BitSet<26> letter_fail;
@@ -517,7 +520,7 @@ public:
   }
   
   /// Analyze the current set of words and store result groups for each one.
-  void PreprocessWords() {
+  void ProcessWords() {
     if (words_processed == 0) std::cout << "Processing Words!" << std::endl;
 
     size_t cur_process = 0;  // Track how many words we've processed THIS time through.
@@ -532,7 +535,7 @@ public:
         result_words.Clear();
         Result result(word_size, result_id);
         if (result.IsValid(word_data.word)) {
-          result_words = PreprocessResultGroup(word_data.word, ToResult(result_id));
+          result_words = ProcessResultGroup(word_data.word, ToResult(result_id));
         }
         word_data.next_words.AddGroup(result_words);
       }
@@ -545,7 +548,7 @@ public:
   }
 
   /// Loop through all words and update their stats.
-  void PreprocessStats() {
+  void ProcessStats() {
     std::cout << "Processing Stats!" << std::endl;
     // If we are not limiting the words, this can go fast...
     if (cur_options.size() == words.size()) {
@@ -561,10 +564,10 @@ public:
   }
 
   /// Handle all of the needed preprocessing.
-  bool Preprocess() {
-    if (!clues_ok) { PreprocessClues(); return false; }
-    if (!words_ok) { PreprocessWords(); return false; }
-    if (!stats_ok) { PreprocessStats(); return false; }
+  bool Process() {
+    if (!clues_ok) { ProcessClues(); return false; }
+    if (!words_ok) { ProcessWords(); return false; }
+    if (!stats_ok) { ProcessStats(); return false; }
     return true;
   }
 
