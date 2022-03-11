@@ -995,7 +995,7 @@ namespace emp {
       auto field_span = FieldSpan();
       std::rotate(
         field_span.begin(),
-        field_span.begin()+field_shift,
+        field_span.begin()+static_cast<int>(field_shift),
         field_span.end()
       );
 
@@ -1401,7 +1401,6 @@ namespace emp {
     emp_assert(stop_pos <= num_bits);
 
     const size_t target_size = stop_pos - start_pos;
-    emp_assert(target_ones >= 0);
     emp_assert(target_ones <= target_size);
 
     // Approximate the probability of ones as a starting point.
@@ -1580,7 +1579,7 @@ namespace emp {
   /// @return Read-only span of BitVector's bytes.
   std::span<const std::byte> BitVector::GetBytes() const {
     return std::span<const std::byte>(
-      bits.ReinterpretCast<const std::byte>(),
+      bits.ReinterpretCast<const std::byte>().Raw(),
       NumBytes()
     );
   }
@@ -2175,7 +2174,7 @@ namespace emp {
         auto field_span = FieldSpan();
         std::rotate(
           field_span.begin(),
-          field_span.begin()+field_shift,
+          field_span.begin()+static_cast<int>(field_shift),
           field_span.end()
         );
       }
