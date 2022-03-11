@@ -59,7 +59,7 @@ public:
             int end_id,
             bool _sorted=false)
   {
-    ids.resize(0);
+    ids.resize(end_id - start_id);
     std::copy(_ids.begin()+start_id, _ids.begin()+end_id, ids.begin());
     sorted = _sorted;
   }
@@ -295,6 +295,10 @@ public:
     cur_options.Clear();
   }
 
+  bool HasWord(const std::string & word) const {
+    return emp::Has(id_map, word);
+  }
+
   void AddClue(const std::string & word, Result result) {
     size_t word_id = id_map[word];
     const auto & word_data = words[word_id];
@@ -479,7 +483,7 @@ public:
   /// Given a guess and a result, determine available options.
   // @CAO: OPTIMIZATION NOTES:
   //       - Make words options static to prevent memory allocation.
-  //       - Figure out all incluse/exclude ID sets and run through them from smallest.
+  //       - Figure out all include/exclude ID sets and run through them from smallest.
   //       - Speed up intersection and subtraction when Set sizes are very different.
   IDSet ProcessResultGroup(const std::string & guess, const Result & result) {
     emp::array<uint8_t, 26> letter_counts;
