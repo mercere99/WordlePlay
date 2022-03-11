@@ -124,15 +124,13 @@ public:
     }
   }
 
-  void Preprocess() {
+  void Process() {
     std::cout << "Processing...\n"
               << "------------------------------------------------------" << std::endl;
 
-    word_set.Preprocess();
-    // while (!word_set.Preprocess()) {
-    //   size_t progress = (size_t) word_set.GetProgress();  // 0 to 100
-    //   if (progress % 2 == 0) { std::cout << '#'; std::cout.flush(); }
-    // }
+    while (!word_set.Process()) {
+      std::cout << '#'; std::cout.flush();
+    }
     std::cout << std::endl;
   }
 
@@ -159,6 +157,11 @@ public:
       return;
     }
 
+    if (word_set.HasWord(clue_word) == false) {
+      Error("Illegal clue word '", clue_word, "'.");
+      return;
+    }
+
     clues.emplace_back(clue_word, clue_result);
 
     CommandStatus();
@@ -174,7 +177,7 @@ public:
     word_size = in_size;
     word_set.SetWordSize(word_size);
     word_set.Load(filename);
-    Preprocess();
+    Process();
   }
 
   void CommandStatus() {
@@ -306,7 +309,7 @@ public:
 
   void Start() {
     PrintHelp();
-    Preprocess();
+    Process();
     std::cout << "..." << word_set.GetSize() << " words are analyzed; " << word_set.GetNumResults() << " results each..." << std::endl;
 
     // Collect inputs.
