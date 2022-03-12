@@ -515,6 +515,10 @@ namespace emp {
     /// Return positions of all ones.
     [[nodiscard]] emp::vector<size_t> GetOnes() const;
 
+    /// Collect positions of ones in the provided vector (allows id type choice)
+    template <typename T>
+    emp::vector<T> & GetOnes(emp::vector<T> & out_vals) const;
+
     /// Find the length of the longest continuous series of ones.
     [[nodiscard]] size_t LongestSegmentOnes() const;
 
@@ -1825,10 +1829,18 @@ namespace emp {
 
   /// Return positions of all ones.
   emp::vector<size_t> BitVector::GetOnes() const {
+    emp::vector<size_t> out_vals;
+    GetOnes(out_vals);
+    return out_vals;
+  }
+
+  /// Return positions of all ones using a specified type.
+  template <typename T>
+  emp::vector<T> & BitVector::GetOnes(emp::vector<T> & out_vals) const {
     // @CAO -- There are better ways to do this with bit tricks.
-    emp::vector<size_t> out_vals(CountOnes());
-    size_t cur_pos = 0;
-    for (size_t i = 0; i < num_bits; i++) {
+    out_vals.resize(CountOnes());
+    T cur_pos = 0;
+    for (T i = 0; i < num_bits; i++) {
       if (Get(i)) out_vals[cur_pos++] = i;
     }
     return out_vals;
