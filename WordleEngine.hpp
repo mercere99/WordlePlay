@@ -15,119 +15,79 @@
 
 #include "Result.hpp"
 
+using IDList = emp::vector<uint16_t>;
+
 class IDSet {
-  friend class IDGroup;
 private:
-  emp::vector<uint16_t> ids;
-  bool sorted = true;
+  emp::BitVector bit_ids;
 
 public:
   IDSet() { }
-  IDSet(size_t count) { SetAll(count); }
-  IDSet(const emp::vector<uint16_t> & _ids, int start_id, int end_id, bool _sorted=false)
-    : ids(_ids.begin()+start_id, _ids.begin()+end_id), sorted(_sorted)
-    { }
+  IDSet(size_t count) : bit_ids(count) { bit_ids.SetAll(); }
+  IDSet(const IDList & _ids, int start_id, int end_id, size_t count)
+    : bit_ids(count)
+  {
+    for (int i = start_id; i < end_id; ++i) bit_ids.Set(_ids[i]);
+  }
   IDSet(const IDSet &) = default;
   IDSet(IDSet &&) = default;
 
   IDSet & operator=(const IDSet &) = default;
   IDSet & operator=(IDSet &&) = default;
 
-  auto begin() const { return ids.begin(); }
-  auto end() const { return ids.end(); }
-  auto begin() { return ids.begin(); }
-  auto end() { return ids.end(); }
+  size_t size() const { return bit_ids.CountOnes(); }
 
-  size_t size() const { return ids.size(); }
-  void Sort() {
-    if (!sorted) {     // Only sort if needed.
-      emp::Sort(ids);  // Always sort in ID order.
-      sorted = true;   // Mark as now sorted.
-    }
+  void Resize(size_t count) { bit_ids.Resize(count); }
+
+  IDList GetSorted() const {
+    IDList out_ids;
+    bit_ids.GetOnes(out_ids);
+    return out_ids;
   }
+
   template <typename T>
-  void Sort(T fun_less) {
-    std::sort(ids.begin(), ids.end(), fun_less);
+  IDList GetSorted(T fun_less) const {
+    IDList out_ids;
+    bit_ids.GetOnes(out_ids);
+    std::sort(out_ids.begin(), out_ids.end(), fun_less);
+    return out_ids;
   }
 
-  uint16_t operator[](size_t pos) const { return ids[pos]; }
+  uint16_t operator[](size_t pos) const { return bit_ids[pos]; }
 
-  void Clear() { ids.resize(0); sorted=true; }
 
-  void Copy(const emp::vector<uint16_t> & _ids,
-            int start_id,
-            int end_id,
-            bool _sorted=false)
-  {
-    ids.resize(end_id - start_id);
-    std::copy(_ids.begin()+start_id, _ids.begin()+end_id, ids.begin());
-    sorted = _sorted;
+  void Clear() { bit_ids.resize(0); }
+  IDList AsList() const { return GetSorted(); }
+
+  uint16_t GetFirstID() const { return (uint16_t) bit_ids.FindOne(); }
+  uint16_t GetNextID(size_t cur_id) const { return (uint16_t) bit_ids.FindOne(cur_id+1); }
+
+  void Copy(const IDList & in_ids,
+            size_t start_id,
+            size_t end_id,
+            size_t count
+  ) {
+    bit_ids.resize(count);
+    bit_ids.Clear();
+    for (size_t i=start_id; i < end_id; ++i) bit_ids.Set(in_ids[i]);
   }
 
-  void Add(uint16_t id) {
-    if (ids.size() && ids.back() >= id) sorted = false;
-    ids.push_back(id);
-  }
+  void Add(uint16_t id) { bit_ids.Set(id); }
 
   void SetAll(size_t count) {
-    ids.resize(count);
-    for (uint16_t i = 0; i < count; ++i) ids[i] = i;
-    sorted = true;
+    bit_ids.resize(count);
+    bit_ids.SetAll();
   }
 
   // Intersection
   IDSet & operator&=(const IDSet & in) {
-    // Make sure both sets are sorted.
-    emp_assert(in.sorted == true);
-    Sort();
-
-    size_t this_next = 0;
-    size_t in_next = 0;
-    size_t keep_count = 0;
-
-    // While there is more to compare...
-    while (this_next < ids.size() && in_next < in.size()) {
-      // If this a match?  Keep it!
-      if (ids[this_next] == in[in_next]) {
-        ids[keep_count] =ids[this_next];
-        ++keep_count; ++this_next; ++in_next;
-      }
-      else if (ids[this_next] < in[in_next]) ++this_next;
-      else ++in_next;
-    }
-
-    ids.resize(keep_count);
-
+    bit_ids &= in.bit_ids;
     return *this;
   }
 
   // Removal
   IDSet & operator-=(IDSet & in) {
-    // Make sure both sets are sorted.
-    Sort();
-    in.Sort();
-
-    size_t this_next = 0;
-    size_t in_next = 0;
-    size_t keep_count = 0;
-
-    // While there is more to compare...
-    while (this_next < ids.size() && in_next < in.size()) {
-      // If we've moved past this word in the exclusion list, keep it!
-      if (ids[this_next] < in[in_next]) {
-        ids[keep_count] = ids[this_next];
-        ++keep_count; ++this_next;
-      }
-      else if (ids[this_next] == in[in_next]) { ++this_next; ++in_next; }
-      else ++in_next;
-    }
-
-    // Any leftovers in the main list should be kept, remove all else.
-    if (keep_count != this_next) {
-      ids.erase(ids.begin()+static_cast<int>(keep_count),
-                ids.begin()+static_cast<int>(this_next));
-    }
-
+    bit_ids &= ~in.bit_ids;
     return *this;
   }
 };
@@ -139,8 +99,9 @@ struct GroupStats {
 };
 
 struct IDGroups {
-  emp::vector<uint16_t> ids;
-  emp::vector<uint16_t> starts;
+  IDList ids;
+  IDList starts;
+  uint16_t num_ids = 0;
 
   IDGroups() { }
   IDGroups(const IDGroups &) = default;
@@ -149,23 +110,31 @@ struct IDGroups {
   IDGroups & operator=(const IDGroups &) = default;
   IDGroups & operator=(IDGroups &&) = default;
 
+  void Reset(size_t in_size) {
+    ids.resize(in_size);
+    starts.resize(0);
+    num_ids = 0;
+  }
+
   void AddGroup(const IDSet & new_group) {
-    starts.push_back((uint16_t) ids.size());
-    ids.insert(ids.end(), new_group.begin(), new_group.end());
+    starts.push_back(num_ids);
+    for (int id = new_group.GetFirstID(); id != (uint16_t) -1; id = new_group.GetNextID(id)) {
+      ids[num_ids++] = static_cast<uint16_t>(id);
+    }
   }
 
   IDSet GetGroup(size_t group_id) const {
     emp_assert(group_id < starts.size(), group_id, starts.size());
     int start_id = starts[group_id];
     int end_id = (group_id+1 < starts.size()) ? starts[group_id+1] : static_cast<int>(ids.size());
-    return IDSet(ids, start_id, end_id, true);
+    return IDSet(ids, start_id, end_id, num_ids);
   }
 
   /// A faster (?) GetGroup that does not require a new allocation.
   void GetGroup(IDSet & out_set, size_t group_id) const {
     int start_id = starts[group_id];
     int end_id = (group_id+1 < starts.size()) ? starts[group_id+1] : static_cast<int>(ids.size());
-    return out_set.Copy(ids, start_id, end_id, true);
+    return out_set.Copy(ids, start_id, end_id, num_ids);
   }
 
   GroupStats CalcStats() {
@@ -284,7 +253,11 @@ public:
   size_t GetNumResults() const { return num_ids; }
   const IDSet & GetOptions() const { return cur_options; }
   IDSet GetAllOptions() const { return IDSet(words.size()); }
-  void ResetOptions() { cur_options.SetAll(words.size()); }
+  void ResetOptions() {
+    cur_options.SetAll(words.size());
+    stats_ok = false;
+    Process();
+  }
 
 
   void SetWordSize(size_t in_size) {
@@ -307,66 +280,77 @@ public:
     Process();
   }
 
-  bool SortWords(IDSet & ids, const std::string & sort_type="alpha") const {
+  IDList SortWords(
+    const IDSet & ids,
+    const std::string & sort_type="alpha"
+  ) const {
     if (sort_type == "max") {
-      ids.Sort( [this](uint16_t id1, uint16_t id2) {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
         const auto & w1 = words[id1].stats;
         const auto & w2 = words[id2].stats;
         if (w1.max_options == w2.max_options) return w1.ave_options < w2.ave_options; // tiebreak
         return w1.max_options < w2.max_options;
       } );
     } else if (sort_type == "ave") {
-      ids.Sort( [this](uint16_t id1, uint16_t id2) {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
         const auto & w1 = words[id1].stats;
         const auto & w2 = words[id2].stats;
         if (w1.ave_options == w2.ave_options) return w1.max_options < w2.max_options; // tiebreak
         return w1.ave_options < w2.ave_options;
       } );
     } else if (sort_type == "info") {
-      ids.Sort( [this](uint16_t id1, uint16_t id2) {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
         const auto & w1 = words[id1].stats;
         const auto & w2 = words[id2].stats;
         return w1.entropy > w2.entropy;
       } );
     } else if (sort_type == "alpha") {
-      ids.Sort( [this](uint16_t id1, uint16_t id2) {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
         const auto & w1 = words[id1];
         const auto & w2 = words[id2];
         return w1.word < w2.word;
       } );
     } else if (sort_type == "r-max") {
-      ids.Sort( [this](uint16_t id1, uint16_t id2) {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
         const auto & w1 = words[id1].stats;
         const auto & w2 = words[id2].stats;
         if (w1.max_options == w2.max_options) return w1.ave_options > w2.ave_options; // tiebreak
         return w1.max_options > w2.max_options;
       } );
     } else if (sort_type == "r-ave") {
-      ids.Sort( [this](uint16_t id1, uint16_t id2) {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
         const auto & w1 = words[id1].stats;
         const auto & w2 = words[id2].stats;
         if (w1.ave_options == w2.ave_options) return w1.max_options > w2.max_options; // tiebreak
         return w1.ave_options > w2.ave_options;
       } );
     } else if (sort_type == "r-info") {
-      ids.Sort( [this](uint16_t id1, uint16_t id2) {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
         const auto & w1 = words[id1].stats;
         const auto & w2 = words[id2].stats;
         return w1.entropy < w2.entropy;
       } );
     } else if (sort_type == "r-alpha") {
-      ids.Sort( [this](uint16_t id1, uint16_t id2) {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
         const auto & w1 = words[id1];
         const auto & w2 = words[id2];
         return w1.word > w2.word;
       } );
     }
-    else return false;
-    return true;
+ 
+    return IDList();
+  }
+
+  IDList SortAllWords(const std::string & sort_type="alpha") const {
+    return SortWords(GetAllOptions(), sort_type);
+  }
+
+  IDList SortCurWords(const std::string & sort_type="alpha") const {
+    return SortWords(GetOptions(), sort_type);
   }
 
   void WriteWords(
-    const IDSet & ids,
+    const IDList & ids,
     std::size_t max_count,
     std::ostream & os=std::cout,
     bool extra_data=true,
@@ -444,8 +428,20 @@ public:
   bool ProcessClues() {
     std::cout << "Processing Clues!" << std::endl;
 
-    for (size_t i=0; i < word_size; ++i) { pos_clues[i].pos = i; }
-    for (size_t let=0; let < 26; let++) { let_clues[let].letter = let; }
+    // Setup all of the clue sizes.
+    for (size_t i=0; i < word_size; ++i) {
+      pos_clues[i].pos = i;
+      for (size_t let=0; let < 26; let++) {
+        pos_clues[i].here[let].Resize(words.size());
+      }
+    }
+    for (size_t let=0; let < 26; let++) {
+      let_clues[let].letter = let;
+      for (size_t i = 0; i <= MAX_LETTER_REPEAT; ++i) {
+        let_clues[let].at_least[i].Resize(words.size());
+        let_clues[let].exactly[i].Resize(words.size());
+      }
+    }
 
     // Counters for number of letters.
     emp::array<uint8_t, 26> letter_counts;
@@ -462,7 +458,7 @@ public:
       for (size_t letter_id = 0; letter_id < 26; ++letter_id) { 
         const size_t cur_count = letter_counts[letter_id];       
         let_clues[letter_id].exactly[cur_count].Add(word_id);
-        for (uint8_t count = 0; count <= cur_count; ++count) {
+        for (uint8_t count = 1; count <= cur_count; ++count) {
           let_clues[letter_id].at_least[count].Add(word_id);
         }
       }
@@ -489,19 +485,24 @@ public:
     emp::array<uint8_t, 26> letter_counts;
     std::fill(letter_counts.begin(), letter_counts.end(), 0);
     emp::BitSet<26> letter_fail;
-    IDSet word_options(words.size());  // Start with all options available.
+    static IDSet word_options;  // Start with all options available.
+    static emp::vector< emp::Ptr<IDSet> > intersect_sets;
+    static emp::vector< emp::Ptr<IDSet> > exclude_sets;
+
+    intersect_sets.resize(0);
+    exclude_sets.resize(0);
 
     // First add HERE clues and collect letter counts.
     for (size_t i = 0; i < word_size; ++i) {
       const uint16_t cur_letter = ToID(guess[i]);
       if (result[i] == Result::HERE) {
-        word_options &= pos_clues[i].here[cur_letter];
+        intersect_sets.push_back( &pos_clues[i].here[cur_letter] );
         ++letter_counts[cur_letter];
       } else if (result[i] == Result::ELSEWHERE) {
-        word_options -= pos_clues[i].here[cur_letter];
+        exclude_sets.push_back( &pos_clues[i].here[cur_letter] );
         ++letter_counts[cur_letter];
       } else {  // Must be 'N'
-        word_options -= pos_clues[i].here[cur_letter];
+        exclude_sets.push_back( &pos_clues[i].here[cur_letter] );
         letter_fail.Set(cur_letter);
       }
     }
@@ -511,14 +512,19 @@ public:
       const size_t let_count = letter_counts[letter_id];
       // If a letter failed, we know exactly how many there are.
       if (letter_fail.Has(letter_id)) {
-        word_options &= let_clues[letter_id].exactly[let_count];
+        intersect_sets.push_back( &let_clues[letter_id].exactly[let_count] );
       }
 
       // Otherwise we know it's at least the number that we tested.
       else if (let_count) {
-        word_options &= let_clues[letter_id].at_least[let_count];
+        intersect_sets.push_back( &let_clues[letter_id].at_least[let_count] );
       }
     }
+
+    // Run through intersections.
+    word_options = *intersect_sets[0];
+    for (size_t i=1; i < intersect_sets.size(); ++i) word_options &= *intersect_sets[i];
+    for (size_t i=0; i < exclude_sets.size(); ++i) word_options -= *exclude_sets[i];
 
     return word_options;
   }
@@ -528,11 +534,11 @@ public:
     if (words_processed == 0) std::cout << "Processing Words!" << std::endl;
 
     size_t cur_process = 0;  // Track how many words we've processed THIS time through.
+    IDSet result_words;
 
     while (words_processed < words.size()) {
       WordData & word_data = words[words_processed++];
-
-      IDSet result_words;
+      word_data.next_words.Reset(words.size());
 
       // Step through each possible result and determine what words that would leave.
       for (size_t result_id = 0; result_id < num_ids; ++result_id) {
@@ -581,7 +587,7 @@ public:
     std::cout << "Position " << pos << ":\n";
     for (uint8_t i = 0; i < 26; ++i) {
       std::cout << " '" << ToLetter(i) << "' : ";
-      WriteWords(clue.here[i], 10, std::cout, false, "", " ");
+      WriteWords(clue.here[i].AsList(), 10, std::cout, false, "", " ");
       std::cout << std::endl;
     }
   }
@@ -591,12 +597,12 @@ public:
     std::cout << "Letter '" << clue.letter << "':\n";
     for (size_t i = 0; i <= MAX_LETTER_REPEAT; ++i) {
       std::cout << "EXACTLY " << i << ":  ";
-      WriteWords(clue.exactly[i], 20, std::cout, false, "", " ");
+      WriteWords(clue.exactly[i].AsList(), 20, std::cout, false, "", " ");
       std::cout << std::endl;
     }
     for (size_t i = 0; i <= MAX_LETTER_REPEAT; ++i) {
       std::cout << "AT LEAST " << i << ": ";
-      WriteWords(clue.at_least[i], 20, std::cout, false, "", " ");
+      WriteWords(clue.at_least[i].AsList(), 20, std::cout, false, "", " ");
       std::cout << std::endl;
     }
   }
