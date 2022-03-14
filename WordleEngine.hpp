@@ -36,6 +36,7 @@ public:
   IDSet & operator=(IDSet &&) = default;
 
   size_t size() const { return bit_ids.CountOnes(); }
+  size_t GetSize() const { return size(); }
 
   void Resize(size_t count) { bit_ids.Resize(count); }
 
@@ -96,6 +97,7 @@ struct GroupStats {
   size_t max_options = 0;
   double ave_options = 0.0;
   double entropy = 0.0;
+  double solve_p = 0.0;
 };
 
 struct IDGroups {
@@ -140,16 +142,19 @@ struct IDGroups {
   GroupStats CalcStats() {
     GroupStats out_stats;
     double total = 0.0;
+    size_t solve_count = 0; // How many options narrow to a single word?
     for (size_t start_id = 0; start_id < starts.size(); ++start_id) {
       const size_t start_pos = starts[start_id];
       const size_t end_pos = (start_id+1 < starts.size()) ? starts[start_id+1] : ids.size();
-      size_t cur_size = end_pos - start_pos;
+      const size_t cur_size = end_pos - start_pos;
+      if (cur_size == 1) ++solve_count;
       if (cur_size > out_stats.max_options) out_stats.max_options = cur_size;
       total += cur_size * cur_size;
       double p = static_cast<double>(cur_size) / ids.size();
       if (p > 0.0) out_stats.entropy -= p * std::log2(p);
     }
     out_stats.ave_options = total / (double) ids.size();
+    out_stats.solve_p = solve_count / (double) ids.size();
     return out_stats;
   }
 
@@ -159,16 +164,19 @@ struct IDGroups {
     IDSet result_group;
 
     double total = 0.0;
+    size_t solve_count = 0; // How many options narrow to a single word?
     for (size_t start_id = 0; start_id < starts.size(); ++start_id) {
       GetGroup(result_group, start_id);
       result_group &= filter_set;
       const size_t cur_size = result_group.size();
+      if (cur_size == 1) ++solve_count;
       if (cur_size > out_stats.max_options) out_stats.max_options = cur_size;
       total += cur_size * cur_size;
       double p = static_cast<double>(cur_size) / filter_set.size();
       if (p > 0.0) out_stats.entropy -= p * std::log2(p);
     }
     out_stats.ave_options = total / (double) filter_set.size();
+    out_stats.solve_p = solve_count / (double) filter_set.size();
     return out_stats;
   }
 };
@@ -308,6 +316,12 @@ public:
         const auto & w2 = words[id2].stats;
         return w1.entropy > w2.entropy;
       } );
+    } else if (sort_type == "solve") {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
+        const auto & w1 = words[id1].stats;
+        const auto & w2 = words[id2].stats;
+        return w1.solve_p > w2.solve_p;
+      } );
     } else if (sort_type == "alpha") {
       return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
         const auto & w1 = words[id1];
@@ -340,6 +354,12 @@ public:
         const auto & w2 = words[id2];
         return w1.word > w2.word;
       } );
+    } else if (sort_type == "r-solve") {
+      return ids.GetSorted( [this](uint16_t id1, uint16_t id2) {
+        const auto & w1 = words[id1].stats;
+        const auto & w2 = words[id2].stats;
+        return w1.solve_p < w2.solve_p;
+      } );
     }
  
     return IDList();
@@ -367,7 +387,8 @@ public:
       if (extra_data) {
         os << col_break << words[id].stats.ave_options
           << col_break << words[id].stats.max_options
-          << col_break << words[id].stats.entropy;
+          << col_break << words[id].stats.entropy
+          << col_break << words[id].stats.solve_p;
       }
       os << line_break;
     }
