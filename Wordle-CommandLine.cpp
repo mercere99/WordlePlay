@@ -40,9 +40,11 @@ public:
   WordleDriver()
   : word_size(5)
   , word_set(wordlist5, word_size)
-  {
-
-  }
+  { }
+  WordleDriver(const std::string & filename, size_t _size)
+  : word_size(_size)
+  , word_set(filename, _size)
+  { }
   WordleDriver(const WordleDriver &) = delete;
   WordleDriver(WordleDriver &&) = delete;
 
@@ -203,9 +205,15 @@ public:
   }
 
   void CommandDict(const std::string & sort_type, size_t count, const std::string & output) {
-    auto out_words = word_set.GetAllOptions();
-    if (word_set.SortWords(out_words, sort_type) == false) {
-      Error("Unknown sort type '", sort_type, "'.  Printing unsorted.");
+    if (word_set.GetSize() == 0) {
+      Error("No words in dictionary.");
+      return;
+    }
+
+    auto out_words = word_set.SortAllWords(sort_type);
+    if (out_words.size() == 0) {
+      Error("Unknown sort type '", sort_type, "'.");
+      return;
     }
 
     if (output == "screen") word_set.WriteWords(out_words, count);
@@ -217,9 +225,16 @@ public:
   }
 
   void CommandWords(const std::string & sort_type, size_t count, const std::string & output) {
-    auto out_words = word_set.GetOptions();
-    if (word_set.SortWords(out_words, sort_type) == false) {
-      Error("Unknown sort type '", sort_type, "'.  Printing unsorted.");
+    if (word_set.GetOptions().size() == 0) {
+      Error("No words remaining in word list.");
+      return;
+    }
+
+    auto out_words = word_set.SortCurWords(sort_type);
+
+    if (out_words.size() == 0) {
+      Error("Unknown sort type '", sort_type, "'.");
+      return;
     }
 
     if (output == "screen") word_set.WriteWords(out_words, count);
@@ -318,8 +333,17 @@ public:
 
 };
 
-int main()
+int main(int argc, char * argv[])
 {
-  WordleDriver driver;
-  driver.Start();
+  if (argc > 1) {  // If arguments are provided, use them!
+    std::string filename = argv[1];
+    size_t word_size = 5;
+    if (argc > 2) word_size = std::stod(std::string(argv[2]));
+    WordleDriver driver(filename, word_size);
+    driver.Start();
+  }
+  else { // Otherwise use the default driver.
+    WordleDriver driver;
+    driver.Start();
+  }
 }
