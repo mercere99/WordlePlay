@@ -249,6 +249,9 @@ public:
   WordleEngine(const emp::vector<std::string> & in_words, size_t _word_size)
   : WordleEngine(_word_size) { Load(in_words); }
 
+  WordleEngine(const std::string & filename, size_t _word_size)
+  : WordleEngine(_word_size) { Load(filename); }
+
   size_t GetSize() const { return words.size(); }
   size_t GetNumResults() const { return num_ids; }
   const IDSet & GetOptions() const { return cur_options; }
@@ -266,6 +269,7 @@ public:
     pos_clues.resize(word_size);
     words.clear();
     cur_options.Clear();
+    id_map.clear();
   }
 
   bool HasWord(const std::string & word) const {
@@ -390,8 +394,6 @@ public:
       words.emplace_back(in_word);   // Setup the word data.
     }
 
-    cur_options.SetAll(words.size());
-
     if (wrong_size_count) {
       std::cerr << "Warning: eliminated " << wrong_size_count << " words of the wrong size."
                 << std::endl;
@@ -408,6 +410,7 @@ public:
     clues_ok = false;
     words_ok = false;
     stats_ok = false;
+    ResetOptions();
 
     std::cout << "Loaded " << words.size() << " valid words." << std::endl;
   }
