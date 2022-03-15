@@ -757,4 +757,76 @@ public:
     }
   }
 
+
+  void AnalyzeTriples() {
+    // Sort words by max individual information.
+    auto info_words = SortAllWords("info");
+
+    MultiGroup multi;
+    GroupStats best_stats;
+    size_t search_count = 0;
+
+    // Prime the best stats with worst-case options.
+    best_stats.ave_options = words.size();
+    best_stats.max_options = words.size();
+
+    // loop through all pairs of words, starting from front of list.
+    for (size_t p1 = 2; p1 < info_words.size(); ++p1) {
+      for (size_t p2 = 1; p2 < p1; ++p2) {
+        for (size_t p3 = 0; p3 < p2; ++p3) {
+          uint16_t w1 = info_words[p1];
+          uint16_t w2 = info_words[p2];
+          uint16_t w3 = info_words[p3];
+
+          multi.Reset();
+          multi.Add(words[w1].next_words);
+          multi.Add(words[w2].next_words);
+          multi.Add(words[w3].next_words);
+
+          GroupStats result = multi.CalcStats();
+
+          if (result.ave_options < best_stats.ave_options) { 
+            best_stats.ave_options = result.ave_options;
+            std::cout << "New best 'AVERAGE' triple: '"
+                      << words[w1].word << "', '" << words[w2].word << "' and " << words[w3].word
+                      << "' with a result of "
+                      << best_stats.ave_options
+                      << std::endl;
+          }
+          if (result.max_options < best_stats.max_options) { 
+            best_stats.max_options = result.max_options;
+            std::cout << "New best 'MAXIMUM' triple: '"
+                      << words[w1].word << "', '" << words[w2].word << "' and " << words[w3].word
+                      << "' with a result of "
+                      << best_stats.max_options
+                      << std::endl;
+          }
+          if (result.entropy > best_stats.entropy) { 
+            best_stats.entropy = result.entropy;
+            std::cout << "New best 'INFO' triple: '"
+                      << words[w1].word << "', '" << words[w2].word << "' and " << words[w3].word
+                      << "' with a result of "
+                      << best_stats.entropy
+                      << std::endl;
+          }
+          if (result.solve_p > best_stats.solve_p) { 
+            best_stats.solve_p = result.solve_p;
+            std::cout << "New best 'SOLVE PROBABILITY' triple: '"
+                      << words[w1].word << "', '" << words[w2].word << "' and " << words[w3].word
+                      << "' with a result of "
+                      << best_stats.solve_p
+                      << std::endl;
+          }
+
+          if (++search_count % 10000 == 0) {
+            std::cout << "===> Searched " << search_count << " combos.  Just finished '"
+                      << words[w1].word << "' [" << p1 << "], '"
+                      << words[w2].word << "' [" << p2 << "] and '"
+                      << words[w3].word << "' [" << p3 << "]."
+                      << std::endl;
+          }
+        }
+      }
+    }
+  }
 };
