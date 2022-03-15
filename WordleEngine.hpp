@@ -181,6 +181,65 @@ struct IDGroups {
   }
 };
 
+/// Track the expected stats after multiple clue results are combined..
+class MultiGroup {
+private:
+  emp::vector<size_t> combo_ids;  // Current set of categories.
+
+public:
+  MultiGroup() { }
+
+  void Reset() { combo_ids.resize(0); }
+
+  void Add(const IDGroups & groups) {
+    // If we dont have the correct number of ids, fix it.
+    if (combo_ids.size() == 0) { combo_ids.resize(groups.ids.size()); }
+
+    /// Loop through all the words, updating their associated category.
+    uint16_t group_id = 0;
+    for (size_t i = 0; i < groups.ids.size(); ++i) {
+      // Find the current group id.
+      while (group_id+1 < groups.starts.size() && groups.starts[group_id+1] <= i) ++group_id;
+
+      combo_ids[groups.ids[i]] <<= 16;
+      combo_ids[groups.ids[i]] += group_id;
+    }
+  }
+
+  GroupStats CalcStats() {
+    GroupStats out_stats;  // Setup the container for the results.
+    emp::Sort(combo_ids);  // Sort the group IDs to better track them.
+    const double total_count = (double) combo_ids.size();
+    combo_ids.push_back((size_t) -1);  // Pad the back of combo ideas for easy stopping.
+
+    double total = 0.0;     // Total choices left for each result answer.
+    size_t solve_count = 0; // How many options narrow to a single word?
+
+    size_t pos = 0;
+    size_t cur_combo = combo_ids[pos];
+    size_t cur_size = 0;
+    while (cur_combo != (size_t) -1) {
+      size_t next_combo = combo_ids[pos++];
+      if (cur_combo == next_combo) { ++cur_size; continue; }
+
+      if (cur_size == 1) ++solve_count;
+      if (cur_size > out_stats.max_options) out_stats.max_options = cur_size;
+      total += cur_size * cur_size;
+      double p = static_cast<double>(cur_size) / total_count;
+      if (p > 0.0) out_stats.entropy -= p * std::log2(p);
+
+      // Move on to the next combination.
+      cur_combo = next_combo;
+      cur_size = 1;
+    }
+    out_stats.ave_options = total / total_count;
+    out_stats.solve_p = solve_count / total_count;
+
+    return out_stats;
+  }
+
+};
+
 class WordleEngine {
 private:
   static constexpr size_t MAX_LETTER_REPEAT = 4;
@@ -631,5 +690,71 @@ public:
     }
   }
 
+  void AnalyzePairs() {
+    // Sort words by max individual information.
+    auto info_words = SortAllWords("info");
+
+    MultiGroup multi;
+    GroupStats best_stats;
+    size_t search_count = 0;
+
+    // Prime the best stats with worst-case options.
+    best_stats.ave_options = words.size();
+    best_stats.max_options = words.size();
+
+    // loop through all pairs of words, starting from front of list.
+    for (size_t p1 = 1; p1 < info_words.size(); ++p1) {
+      for (size_t p2 = 0; p2 < p1; ++p2) {
+        uint16_t w1 = info_words[p1];
+        uint16_t w2 = info_words[p2];
+
+        multi.Reset();
+        multi.Add(words[w1].next_words);
+        multi.Add(words[w2].next_words);
+
+        GroupStats result = multi.CalcStats();
+
+        if (result.ave_options < best_stats.ave_options) { 
+          best_stats.ave_options = result.ave_options;
+          std::cout << "New best 'AVERAGE' pair: '"
+                    << words[w1].word << "' and '" << words[w2].word
+                    << "' with a result of "
+                    << best_stats.ave_options
+                    << std::endl;
+        }
+        if (result.max_options < best_stats.max_options) { 
+          best_stats.max_options = result.max_options;
+          std::cout << "New best 'MAXIMUM' pair: '"
+                    << words[w1].word << "' and '" << words[w2].word
+                    << "' with a result of "
+                    << best_stats.max_options
+                    << std::endl;
+        }
+        if (result.entropy > best_stats.entropy) { 
+          best_stats.entropy = result.entropy;
+          std::cout << "New best 'INFO' pair: '"
+                    << words[w1].word << "' and '" << words[w2].word
+                    << "' with a result of "
+                    << best_stats.entropy
+                    << std::endl;
+        }
+        if (result.solve_p > best_stats.solve_p) { 
+          best_stats.solve_p = result.solve_p;
+          std::cout << "New best 'SOLVE PROBABILITY' pair: '"
+                    << words[w1].word << "' and '" << words[w2].word
+                    << "' with a result of "
+                    << best_stats.solve_p
+                    << std::endl;
+        }
+
+        if (++search_count % 10000 == 0) {
+          std::cout << "===> Searched " << search_count << " combos.  Just finished '"
+                    << words[w1].word << "' and '" << words[w2].word
+                    << "'."
+                    << std::endl;
+        }
+      }
+    }
+  }
 
 };
