@@ -138,14 +138,15 @@ public:
 
  
   void CommandAnalyze(const std::string & mode) {
-    // if (mode == "pairs" || mode == "p") {
-    //   // Loop through all word pairs, starting from early words.
-    //   for (size_t w1 = 0; w1 < word_set.GetSize(); ++w1) {
-    //     word_set.AnalyzeMaxPairs();
-    //   }
-    //   return;
-    // }
-    Error("Unknown analyze mode '", mode, "'.");
+    if (mode == "pairs" || mode == "p") {
+      std::cout << "== Analyzing Pairs ==" << std::endl;
+      word_set.AnalyzePairs();
+    }
+    else if (mode == "triples" || mode == "t") {
+      std::cout << "== Analyzing Pairs ==" << std::endl;
+      word_set.AnalyzeTriples();
+    }
+    else Error("Unknown analyze mode '", mode, "'.");
   }
 
   void CommandClue(const std::string & clue_word, const std::string clue_result) {
