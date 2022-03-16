@@ -55,11 +55,13 @@ public:
       << "  Example: \"clue start EHNNN\" would indicate that there is an 's', but not at\n"
       << "           the front, a 't' second, no 'a's or 'r's, and no additional 't's.\n"
       << "Commands:\n"
+      << "   analyze  : perform additional tests on the words\n"
+      << "              format: analyze [mode]\n"
       << "   clue     : provide a new clue and its result.\n"
       << "              format: clue [word] [result]\n"
       << "   dict     : list all words from the full dictionary.\n"
       << "              format: dict [sort=alpha] [count=10] [output=screen]\n"
-      << "   help     : Provide addition information about a command.\n"
+      << "   help     : provide addition information about a command.\n"
       << "              format: help [command]\n"
       << "   load     : load in a new dictionary\n"
       << "              format: load [filename] [letters=5]\n"
@@ -78,9 +80,11 @@ public:
   void PrintHelp(const std::string & term) {
     if (term == "analyze") {
       std::cout << "The 'analyze' command allows you to perform more intensive scans through words.\n"
-        << "Format: analyze [command]\n"
+        << "Format: analyze [command] {extra...}\n"
         << "  [command] determines the specific analysis to perform.  Options are:\n"
+        << "            'stats' to output statistics about the words that follow.\n"
         << "            'pairs' to scan through data for all pairs of words.\n"
+        << "            'triples' to scan through data for all sets of 3 words.\n"
         << "            (...more to come...)\n)"
         << std::endl;
     } else if (term == "clue") {
@@ -137,10 +141,17 @@ public:
   }
 
  
-  void CommandAnalyze(const std::string & mode) {
+  void CommandAnalyze(emp::vector<std::string> args) {
+    std::string mode = args[1];
+
     if (mode == "pairs" || mode == "p") {
       std::cout << "== Analyzing Pairs ==" << std::endl;
       word_set.AnalyzePairs();
+    }
+    else if (mode == "stats" || mode == "s") {
+      args.erase(args.begin(), args.begin()+2); // Remove first two args from input.
+      std::cout << "== Analyzing Stats ==" << std::endl;
+      word_set.AnalyzeStats(args);
     }
     else if (mode == "triples" || mode == "t") {
       std::cout << "== Analyzing Pairs ==" << std::endl;
@@ -258,8 +269,8 @@ public:
     if (args.size() == 0) return true;  // Empty line!
 
     if (args[0] == "analyze" || args[0] == "a") {
-      if (args.size() != 2) Error("'analyze' requires specification of analyze mode.");
-      else CommandAnalyze(args[1]);
+      if (args.size() < 2) Error("'analyze' requires specification of analyze mode.");
+      else CommandAnalyze(args);
     }
 
     else if (args[0] == "clue" || args[0] == "c") {
