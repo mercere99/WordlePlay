@@ -306,6 +306,8 @@ private:
   bool stats_ok = true;        // Do the words have associated stats?
   size_t words_processed = 0;  // Track how many words are done...
 
+  double progress = 0.0;             // Fraction of progess on loading a file.
+
 public:
   WordleEngine(size_t _word_size)
   : word_size(_word_size)
@@ -328,6 +330,7 @@ public:
     stats_ok = false;
     Process();
   }
+  double GetProgress() const { return progress; }
 
 
   void SetWordSize(size_t in_size) {
@@ -614,7 +617,10 @@ public:
   
   /// Analyze the current set of words and store result groups for each one.
   void ProcessWords() {
-    if (words_processed == 0) std::cout << "Processing Words!" << std::endl;
+    if (words_processed == 0) {
+      progress = 0.0;
+      std::cout << "Processing Words!" << std::endl;
+    }
 
     size_t cur_process = 0;  // Track how many words we've processed THIS time through.
     IDSet result_words;
@@ -633,7 +639,10 @@ public:
         word_data.next_words.AddGroup(result_words);
       }
 
-      if (++cur_process >= 100) return;
+      if (++cur_process >= 100) {
+        progress = words_processed / (double) words.size();
+        return;
+      }
     }
 
     words_processed = 0; // Reset words processed for next time.
@@ -688,6 +697,26 @@ public:
       WriteWords(clue.at_least[i].AsList(), 20, std::cout, false, "", " ");
       std::cout << std::endl;
     }
+  }
+
+  void AnalyzeStats(const emp::vector<std::string> & in_words) {
+    // Collect the word data
+    MultiGroup multi;
+    for (const auto & word : in_words) {
+      uint16_t id = id_map[word];
+      multi.Add(words[id].next_words);
+    }
+
+    // Calculate the metrics
+    GroupStats result = multi.CalcStats();
+    
+    // Output the results
+    std::cout << "Metrics for " << emp::to_quoted_list(in_words) << ":\n"
+              << "  expected # of remaining options: " << result.ave_options << "\n"
+              << "  maximum # of remaining options:  " << result.max_options << "\n"
+              << "  information provided:            " << result.entropy << " bits\n"
+              << "  prob. of only one solution left: " << result.solve_p << "\n"
+              << std::endl;
   }
 
   void AnalyzePairs() {
