@@ -188,6 +188,9 @@ private:
 
 public:
   MultiGroup() { }
+  MultiGroup(const MultiGroup & in) { combo_ids = in.combo_ids; }
+
+  MultiGroup & operator=(const MultiGroup & in) { combo_ids = in.combo_ids; return *this; }
 
   void Reset() { combo_ids.resize(0); }
 
@@ -791,8 +794,10 @@ public:
     // Sort words by max individual information.
     auto info_words = SortAllWords("info");
 
-    MultiGroup multi;
+    MultiGroup multi2;
+    MultiGroup multi3;
     GroupStats best_stats;
+    std::string best_words[4];
     size_t search_count = 0;
 
     // Prime the best stats with worst-case options.
@@ -800,19 +805,20 @@ public:
     best_stats.max_options = words.size();
 
     // loop through all pairs of words, starting from front of list.
-    for (size_t p1 = 2; p1 < info_words.size(); ++p1) {
+    for (size_t p1 = 1455; p1 < info_words.size(); ++p1) {
+      uint16_t w1 = info_words[p1];
       for (size_t p2 = 1; p2 < p1; ++p2) {
+        uint16_t w2 = info_words[p2];
+        multi2.Reset();
+        multi2.Add(words[w1].next_words);
+        multi2.Add(words[w2].next_words);
         for (size_t p3 = 0; p3 < p2; ++p3) {
-          uint16_t w1 = info_words[p1];
-          uint16_t w2 = info_words[p2];
           uint16_t w3 = info_words[p3];
 
-          multi.Reset();
-          multi.Add(words[w1].next_words);
-          multi.Add(words[w2].next_words);
-          multi.Add(words[w3].next_words);
+          multi3 = multi2;
+          multi3.Add(words[w3].next_words);
 
-          GroupStats result = multi.CalcStats();
+          GroupStats result = multi3.CalcStats();
 
           if (result.ave_options < best_stats.ave_options) { 
             best_stats.ave_options = result.ave_options;
@@ -821,6 +827,7 @@ public:
                       << "' with a result of "
                       << best_stats.ave_options
                       << std::endl;
+            best_words[0] = emp::to_string(words[w1].word, ", ", words[w2].word, ", ", words[w3].word);
           }
           if (result.max_options < best_stats.max_options) { 
             best_stats.max_options = result.max_options;
@@ -829,6 +836,7 @@ public:
                       << "' with a result of "
                       << best_stats.max_options
                       << std::endl;
+            best_words[1] = emp::to_string(words[w1].word, ", ", words[w2].word, ", ", words[w3].word);
           }
           if (result.entropy > best_stats.entropy) { 
             best_stats.entropy = result.entropy;
@@ -837,6 +845,7 @@ public:
                       << "' with a result of "
                       << best_stats.entropy
                       << std::endl;
+            best_words[2] = emp::to_string(words[w1].word, ", ", words[w2].word, ", ", words[w3].word);
           }
           if (result.solve_p > best_stats.solve_p) { 
             best_stats.solve_p = result.solve_p;
@@ -845,15 +854,29 @@ public:
                       << "' with a result of "
                       << best_stats.solve_p
                       << std::endl;
+            best_words[3] = emp::to_string(words[w1].word, ", ", words[w2].word, ", ", words[w3].word);
           }
 
-          if (++search_count % 10000 == 0) {
-            std::cout << "===> Searched " << search_count << " combos.  Just finished '"
+          if (search_count % 10000 == 0) {
+            std::cout << "===> " << (search_count/1000) << "k combos; Last: '"
                       << words[w1].word << "' [" << p1 << "], '"
-                      << words[w2].word << "' [" << p2 << "] and '"
-                      << words[w3].word << "' [" << p3 << "]."
+                      << words[w2].word << "' [" << p2 << "] & '"
+                      << words[w3].word << "' [" << p3 << "] ("
+                      << best_stats.ave_options << "/"
+                      << best_stats.max_options << "/"
+                      << best_stats.entropy << "/"
+                      << best_stats.solve_p << ")"
                       << std::endl;
           }
+          if (search_count % 1000000 == 0) {
+            std::cout << "STATUS:\n"
+                      << "Ave  : " << best_words[0] << " : " << best_stats.ave_options << "\n"
+                      << "Max  : " << best_words[1] << " : " << best_stats.max_options << "\n"
+                      << "Info : " << best_words[2] << " : " << best_stats.entropy << "\n"
+                      << "Prob : " << best_words[3] << " : " << best_stats.solve_p << "\n"
+                      << std::endl;
+          }
+          ++search_count;
         }
       }
     }
