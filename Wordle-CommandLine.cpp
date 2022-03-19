@@ -154,7 +154,7 @@ public:
       word_set.AnalyzeStats(args);
     }
     else if (mode == "triples" || mode == "t") {
-      std::cout << "== Analyzing Pairs ==" << std::endl;
+      std::cout << "== Analyzing Triples ==" << std::endl;
       word_set.AnalyzeTriples();
     }
     else Error("Unknown analyze mode '", mode, "'.");
