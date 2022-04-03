@@ -275,10 +275,19 @@ public:
     std::cout << "> ";
     std::cout.flush();
     getline(std::cin, input);
+    emp::compress_whitespace(input);
+    if (input.size() == 0) return true; // Empty line!
+
+    // Repeat last line?
+    for (size_t pos = input.find("!!");
+         pos != std::string::npos;
+         pos = input.find("!!", pos+1))
+    {
+      input.replace(pos, 2, history.back());
+    }
+
     history.push_back(input);
     emp::slice(input, args, ' ');
-
-    if (args.size() == 0) return true;  // Empty line!
 
     if (args[0] == "analyze" || args[0] == "a") {
       if (args.size() < 2) Error("'analyze' requires specification of analyze mode.");
