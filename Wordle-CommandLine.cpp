@@ -19,6 +19,7 @@ class WordleDriver {
 private:
   size_t word_size;
   WordleEngine word_set;
+  emp::vector<std::string> history;
 
   struct Clue {
     std::string word;
@@ -55,22 +56,23 @@ public:
       << "  Example: \"clue start EHNNN\" would indicate that there is an 's', but not at\n"
       << "           the front, a 't' second, no 'a's or 'r's, and no additional 't's.\n"
       << "Commands:\n"
-      << "   analyze  : perform additional tests on the words\n"
-      << "              format: analyze [mode]\n"
-      << "   clue     : provide a new clue and its result.\n"
-      << "              format: clue [word] [result]\n"
-      << "   dict     : list all words from the full dictionary.\n"
-      << "              format: dict [sort=alpha] [count=10] [output=screen]\n"
-      << "   help     : provide addition information about a command.\n"
-      << "              format: help [command]\n"
-      << "   load     : load in a new dictionary\n"
-      << "              format: load [filename] [letters=5]\n"
-      << "   pop      : remove most recently added clue.\n"
-      << "   quit     : exit the program.\n"
-      << "   reset    : erase all current clues.\n"
-      << "   status   : show the current clue stack.\n"
-      << "   words    : list top legal words (type 'help words' for full information).\n"
-      << "              format: words [sort=alpha] [count=10] [output=screen]\n"
+      << "   analyze    : perform additional tests on the words\n"
+      << "                format: analyze [mode]\n"
+      << "   clue       : provide a new clue and its result.\n"
+      << "                format: clue [word] [result]\n"
+      << "   dict       : list all words from the full dictionary.\n"
+      << "                format: dict [sort=alpha] [count=10] [output=screen]\n"
+      << "   help       : provide addition information about a command.\n"
+      << "                format: help [command]\n"
+      << "   load       : load in a new dictionary\n"
+      << "                format: load [filename] [letters=5]\n"
+      << "   pop        : remove most recently added clue.\n"
+      << "   quit       : exit the program.\n"
+      << "   reset      : erase all current clues.\n"
+      << "   status     : show the current clue stack.\n"
+      << "   transcript : print a history of all prior commands.\n"
+      << "   words      : list top legal words (type 'help words' for full information).\n"
+      << "                format: words [sort=alpha] [count=10] [output=screen]\n"
       << "All commands can be shortened to just their first letter.\n"
       << "(Commands under development: 'analyze'\n)"
       << std::endl;
@@ -112,6 +114,8 @@ public:
       std::cout << "'reset' will erase all state; same as restarting the program.\n" << std::endl;
     } else if (term == "status") {
       std::cout << "'status' will print out all of the clues you have entered so far.\n" << std::endl;
+    } else if (term == "transcript") {
+      std::cout << "'transcript' will print out a history of all prior commands.\n" << std::endl;
     } else if (term == "words") {
       std::cout << "The 'words' command outputs all words that meet the current clues.\n"
         << "Format: words [sort=alpha] [count=10] [output=screen]\n"
@@ -216,6 +220,13 @@ public:
     std::cout.flush();
   }
 
+  void CommandTranscript() {
+    std::cout << "History:\n";
+    for (size_t i = 0; i < history.size(); ++i) {
+      std::cout << "  " << i << " : " << history[i] << std::endl;
+    }
+  }
+
   void CommandDict(const std::string & sort_type, size_t count, const std::string & output) {
     if (word_set.GetSize() == 0) {
       Error("No words in dictionary.");
@@ -264,6 +275,7 @@ public:
     std::cout << "> ";
     std::cout.flush();
     getline(std::cin, input);
+    history.push_back(input);
     emp::slice(input, args, ' ');
 
     if (args.size() == 0) return true;  // Empty line!
@@ -320,6 +332,10 @@ public:
 
     else if (args[0] == "status" || args[0] == "s") {
       CommandStatus();
+    }
+
+    else if (args[0] == "transcript" || args[0] == "t") {
+      CommandTranscript();
     }
 
     else if (args[0] == "words" || args[0] == "w") {
