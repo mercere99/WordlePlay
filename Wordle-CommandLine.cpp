@@ -278,16 +278,22 @@ public:
     emp::compress_whitespace(input);
     if (input.size() == 0) return true; // Empty line!
 
+    // --- handle special characters ---
+    bool print_line = false;
     // Repeat last line?
     for (size_t pos = input.find("!!");
          pos != std::string::npos;
          pos = input.find("!!", pos+1))
     {
       input.replace(pos, 2, history.back());
+      print_line = true;
     }
 
     history.push_back(input);
+    if (print_line) std::cout << input << std::endl;
     emp::slice(input, args, ' ');
+
+    // --- Process the commands ---
 
     if (args[0] == "analyze" || args[0] == "a") {
       if (args.size() < 2) Error("'analyze' requires specification of analyze mode.");
