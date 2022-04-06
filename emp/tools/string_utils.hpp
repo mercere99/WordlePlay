@@ -343,6 +343,7 @@ namespace emp {
 
   /// Determine if there is whitespace anywhere in a string.
   inline bool has_whitespace(const std::string & str) { return WhitespaceCharSet().HasAny(str); }
+  inline bool has_nonwhitespace(const std::string & str) { return !WhitespaceCharSet().HasOnly(str); }
   inline bool has_upper_letter(const std::string & str) { return UpperCharSet().HasAny(str); }
   inline bool has_lower_letter(const std::string & str) { return LowerCharSet().HasAny(str); }
   inline bool has_letter(const std::string & str) { return LetterCharSet().HasAny(str); }
