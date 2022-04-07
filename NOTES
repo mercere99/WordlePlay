@@ -1,0 +1,47 @@
+Assuming wordcount N = 5000
+
+There are 3^5 = 243 possible results.
+
+NNNNN
+
+ENNNN x 5
+EENNN x 10
+EEENN x 10
+EEEEN x 5
+EEEEE
+
+HNNNN x 5
+HHNNN x 10
+HHHNN x 10
+HHHHN x 5
+HHHHH - trivial
+
+EHNNN x 20
+EHHNN x 30
+EHHHN x 20
+EHHHH x 5 - impossible
+
+EEHNN x 30
+EEHHN x 30
+EEHHH x 10
+
+EEEHN x 20
+EEEHH x 10
+
+EEEEH x 5
+
+
+
+If we are going to track next options for each word we have two ways of doing this:
+1 - Keep a list of which words are possible next.
+    2 bytes per word x 5000 words - ~10k bytes (plus overhead for result groupings.)
+    For all 5000 words, this is 50m bytes
+    Slow for finding unions & intersections (though sorting helps)
+2 - Keep an easy-to-modify bitmap of next words.
+    5000 bits per grouping x 243 groupings = ~150k bytes
+    For all 5000 words, this is 750m bytes
+    FAST for finding unions and intersections.
+
+
+CLUES:
+
