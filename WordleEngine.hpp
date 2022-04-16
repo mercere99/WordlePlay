@@ -722,6 +722,22 @@ public:
               << std::endl;
   }
 
+  void AnalyzeLoci() {
+    auto ids = cur_options.GetSorted();
+    for (size_t pos = 0; pos < word_size; ++pos) {
+      emp::array<char, 26> letters{};
+      for (size_t id : ids) {
+        const std::string & word = words[id].word;
+        letters[ ToID(word[pos]) ] = true;
+      }
+      std::cout << " ";
+      for (size_t i = 0; i < 26; ++i){
+        if (letters[i]) std::cout << ToLetter(i);
+      }
+      std::cout << std::endl;
+    }
+  }
+
   void AnalyzePairs() {
     // Sort words by max individual information.
     auto info_words = SortAllWords("info");
