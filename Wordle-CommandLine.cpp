@@ -144,11 +144,14 @@ public:
     std::cout << std::endl;
   }
 
- 
   void CommandAnalyze(emp::vector<std::string> args) {
     std::string mode = args[1];
 
-    if (mode == "pairs" || mode == "p") {
+    if (mode == "loci" || mode == "l") {
+      std::cout << "== Analyzing Words at each Location ==" << std::endl;
+      word_set.AnalyzeLoci();
+    }
+    else if (mode == "pairs" || mode == "p") {
       std::cout << "== Analyzing Pairs ==" << std::endl;
       word_set.AnalyzePairs();
     }
@@ -227,12 +230,19 @@ public:
     }
   }
 
-  void CommandDict(const std::string & sort_type, size_t count, const std::string & output) {
+  void CommandDict(std::string sort_type, size_t count, const std::string & output) {
     if (word_set.GetSize() == 0) {
       Error("No words in dictionary.");
       return;
     }
 
+    // If a number was used for sort type, assume that's the count and use alpha.
+    if (emp::is_number(sort_type)) {
+      count = emp::from_string<size_t>(sort_type);
+      sort_type = "alpha";
+    }
+
+    // Get the sorted words
     auto out_words = word_set.SortAllWords(sort_type);
     if (out_words.size() == 0) {
       Error("Unknown sort type '", sort_type, "'.");
@@ -247,14 +257,20 @@ public:
     }
   }
 
-  void CommandWords(const std::string & sort_type, size_t count, const std::string & output) {
+  void CommandWords(std::string sort_type, size_t count, const std::string & output) {
     if (word_set.GetOptions().size() == 0) {
       Error("No words remaining in word list.");
       return;
     }
 
-    auto out_words = word_set.SortCurWords(sort_type);
+    // If a number was used for sort type, assume that's the count and use alpha.
+    if (emp::is_number(sort_type)) {
+      count = emp::from_string<size_t>(sort_type);
+      sort_type = "alpha";
+    }
 
+    // Get the sorted words
+    auto out_words = word_set.SortCurWords(sort_type);
     if (out_words.size() == 0) {
       Error("Unknown sort type '", sort_type, "'.");
       return;
