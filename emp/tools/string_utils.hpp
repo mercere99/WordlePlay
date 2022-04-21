@@ -874,6 +874,22 @@ namespace emp {
 
   using string_vec_t = emp::vector<std::string>;
 
+  static inline std::string combine_strings(const string_vec_t & strings, std::string spacer=" ") {
+    // If there are no input strings, return an empty string.
+    if (strings.size() == 0) { return ""; }
+
+    // If there is one string provided, return it by itself.
+    if (strings.size() == 1) { return strings[0]; }
+
+    // If there is more than one, separate with spaces.
+    std::string out_string = strings[0];
+    for (size_t i = 1; i < strings.size(); ++i) {
+      out_string += spacer;
+      out_string += strings[i];
+    }
+    return out_string;
+  }
+  
   /// Convert a vector of strings to an English list, such as "one, two, three, and four."
   static inline std::string to_english_list(const string_vec_t & strings) {
     // If there are no input strings, return an empty string.
