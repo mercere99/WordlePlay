@@ -357,6 +357,47 @@ public:
     Process();
   }
 
+  bool TestPattern(const std::string & word, const std::string & pattern) {
+    if (word.size() != pattern.size()) return false;
+    for (size_t i = 0; i < word.size(); ++i) {
+      if (pattern[i] != '.' && pattern[i] != word[i]) return false;
+    }
+    return true;
+  }
+
+  IDList FilterWords(
+    const IDSet & ids,
+    const std::string & pattern,
+    const std::string & include="",
+    const std::string & exclude=""
+  ) const {
+    IDSet out_ids = ids;
+
+    // Limit based on pattern.
+    for (size_t i = 0; i < pattern.size(); ++i) {
+      if (pattern[i] == '.') continue;
+      out_ids &= pos_clues[i].here[ ToID(pattern[i]) ];
+    }
+
+    // Limit based on includes.  Count the number of each letter, and at least that
+    // many must be in the result.
+    emp::array<size_t, 26> include_count{};
+    for (char x : include) {
+      const size_t cur_id = ToID(x);
+      include_count[ cur_id ]++;
+      out_ids &= let_clues[cur_id].at_least[ include_count[cur_id] ];
+    }
+
+    // Exclude specified letters.  If also included, that mean ADDITIONAL matches
+    // must be excluded.
+    for (char x : exclude) {
+      const size_t cur_id = ToID(x);
+      out_ids &= let_clues[cur_id].exactly[ include_count[cur_id] ];
+    }
+
+    return out_ids.AsList();
+  }
+
   IDList SortWords(
     const IDSet & ids,
     const std::string & sort_type="alpha"
@@ -436,6 +477,18 @@ public:
 
   IDList SortCurWords(const std::string & sort_type="alpha") const {
     return SortWords(GetOptions(), sort_type);
+  }
+
+  IDList FilterAllWords(const std::string & pattern,
+                        const std::string & include="",
+                        const std::string & exclude="") const {
+    return FilterWords(GetAllOptions(), pattern, include, exclude);
+  }
+
+  IDList FilterCurWords(const std::string & pattern,
+                        const std::string & include="",
+                        const std::string & exclude="") const {
+    return FilterWords(GetOptions(), pattern, include, exclude);
   }
 
   void WriteWords(
