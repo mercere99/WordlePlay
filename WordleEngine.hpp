@@ -335,6 +335,7 @@ public:
   }
   double GetProgress() const { return progress; }
 
+  void SetOptions(const IDSet & in) { cur_options = in; }
 
   void SetWordSize(size_t in_size) {
     word_size = in_size;
@@ -365,7 +366,7 @@ public:
     return true;
   }
 
-  IDList FilterWords(
+  IDSet FilterWords(
     const IDSet & ids,
     const std::string & pattern,
     const std::string & include="",
@@ -395,7 +396,7 @@ public:
       out_ids &= let_clues[cur_id].exactly[ include_count[cur_id] ];
     }
 
-    return out_ids.AsList();
+    return out_ids;
   }
 
   IDList SortWords(
@@ -479,13 +480,13 @@ public:
     return SortWords(GetOptions(), sort_type);
   }
 
-  IDList FilterAllWords(const std::string & pattern,
+  IDSet FilterAllWords(const std::string & pattern,
                         const std::string & include="",
                         const std::string & exclude="") const {
     return FilterWords(GetAllOptions(), pattern, include, exclude);
   }
 
-  IDList FilterCurWords(const std::string & pattern,
+  IDSet FilterCurWords(const std::string & pattern,
                         const std::string & include="",
                         const std::string & exclude="") const {
     return FilterWords(GetOptions(), pattern, include, exclude);
