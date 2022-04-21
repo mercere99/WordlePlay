@@ -24,9 +24,11 @@ private:
   struct Clue {
     std::string word;
     Result result;
+    bool is_filter;  // Some clues can be in the form of a filter.
 
     Clue() { };
-    Clue(const std::string & _w, const Result & _r) : word(_w), result(_r) { }
+    Clue(const std::string & _w, const Result & _r, bool _f=false)
+      : word(_w), result(_r), is_filter(_f) { }
   };
   emp::vector<Clue> clues;
 
@@ -64,8 +66,7 @@ public:
       << "                  format: dict [sort=alpha] [count=10] [output=screen]\n"
       << "   filter     [f] limit current words using a pattern or allowed/rejected letters.\n"
       << "                  use . for wildcard; follow with + for anywhere and - for nowhere\n"
-      << "                    e.g.:   find a..e. -pri +s\n"
-      << "                  to give words like aloes, asked, asset, etc\n"
+      << "                  e.g.: 'find a..e. -pri +s' keeps words like aloes, asked, asset, etc\n"
       << "   help       [h] provide addition information about a command.\n"
       << "                  format: help [command]\n"
       << "   load       [l] load in a new dictionary\n"
@@ -284,6 +285,7 @@ public:
     auto cur_words = word_set.FilterCurWords(pattern, include, exclude);
     word_set.SetOptions(cur_words);
     std::cout << "Filtered down to " << cur_words.GetSize() << " words." << std::endl;
+    clues.emplace_back(emp::to_string(emp::combine_strings(args)), Result(word_size,0), true);
   }
   
   void CommandFind(const emp::vector<std::string> & args) {
@@ -345,6 +347,31 @@ public:
     Process();
   }
 
+  void PrintClue(const Clue & clue) const {
+    if (clue.is_filter) {
+      auto filters = emp::slice(clue.word);
+      for (const auto & f : filters) {
+        if (f[0] == '+') std::cout << emp::ANSI_Yellow() << emp::ANSI_BlackBG();
+        else if (f[0] == '-') std::cout << emp::ANSI_Red() << emp::ANSI_BlackBG();
+        else std::cout << emp::ANSI_Green() << emp::ANSI_BlackBG();
+        std::cout << f << " ";
+      }
+      std::cout << emp::ANSI_Reset() << "\n";
+      return;
+    }
+
+    for (size_t let_id = 0; let_id < word_size; ++let_id) {
+      switch (clue.result[let_id]) {
+        case Result::HERE:      std::cout << emp::ANSI_Black() << emp::ANSI_GreenBG(); break;
+        case Result::ELSEWHERE: std::cout << emp::ANSI_Black() << emp::ANSI_YellowBG(); break;
+        case Result::NOWHERE:   std::cout << emp::ANSI_White() << emp::ANSI_BlackBG(); break;
+        case Result::NONE:      std::cout << emp::ANSI_Red()   << emp::ANSI_BlackBG(); break;
+      }
+      std::cout << clue.word[let_id];
+    }
+    std::cout << emp::ANSI_Reset() << "\n";
+  }
+
   void CommandStatus() {
     if (clues.size() == 0) {
       std::cout << "No clues currently enforced.\n";
@@ -353,16 +380,7 @@ public:
 
     for (size_t clue_id = 0; clue_id < clues.size(); ++clue_id) {
       std::cout << "  [" << clue_id << "] : ";
-      for (size_t let_id = 0; let_id < word_size; ++let_id) {
-        switch (clues[clue_id].result[let_id]) {
-          case Result::HERE:      std::cout << emp::ANSI_Black()  << emp::ANSI_GreenBG(); break;
-          case Result::ELSEWHERE: std::cout << emp::ANSI_Black()  << emp::ANSI_YellowBG(); break;
-          case Result::NOWHERE:   std::cout << emp::ANSI_White()  << emp::ANSI_BlackBG(); break;
-          case Result::NONE:      std::cout << emp::ANSI_Red()    << emp::ANSI_BlackBG(); break;
-        }
-        std::cout << clues[clue_id].word[let_id];
-      }
-      std::cout << emp::ANSI_Reset() << "\n";
+      PrintClue(clues[clue_id]);
     }
     std::cout.flush();
   }
@@ -500,7 +518,19 @@ public:
         clues.pop_back();                           // Remove last clue.
         word_set.ResetOptions();                    // Reset available words.
         for (auto clue : clues) {                   // Add remaining clues.
-          word_set.AddClue(clue.word, clue.result);
+          // If this clue is a filter, reconstruct it.
+          if (clue.is_filter) {
+            std::string filters = clue.word;
+            std::string pattern(word_size,'.'), include, exclude;
+            while (filters.size()) {
+              if (filters[0] == '+') include = emp::string_pop_word(filters);
+              if (filters[0] == '-') exclude = emp::string_pop_word(filters);
+              else pattern = emp::string_pop_word(filters);
+            }
+            word_set.FilterCurWords(pattern, include, exclude);
+          }
+          // Otherwise process it as a proper clue.
+          else word_set.AddClue(clue.word, clue.result);
         }
       }
     }
