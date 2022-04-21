@@ -62,10 +62,10 @@ public:
       << "                  format: clue [word] [result]\n"
       << "   dict       [d] list all words from the full dictionary.\n"
       << "                  format: dict [sort=alpha] [count=10] [output=screen]\n"
-      << "   find       [f] search current words for a pattern."
-      << "                  use . for wildcard; follow with + for anywhere and - for nowhere"
-      << "                    e.g.:   find a..e. -pri +s"
-      << "                  to give words like aloes, asked, asset, etc."
+      << "   filter     [f] limit current words using a pattern or allowed/rejected letters.\n"
+      << "                  use . for wildcard; follow with + for anywhere and - for nowhere\n"
+      << "                    e.g.:   find a..e. -pri +s\n"
+      << "                  to give words like aloes, asked, asset, etc\n"
       << "   help       [h] provide addition information about a command.\n"
       << "                  format: help [command]\n"
       << "   load       [l] load in a new dictionary\n"
@@ -111,6 +111,15 @@ public:
         << "         Place an 'r-' in front of a sorting method to reverse it.\n"
         << "  [count] is the maximum number of words to print (10 by default).\n"
         << "  [output] prints to the filename provided (e.g, 'data.csv') or to the 'screen'.\n"
+        << std::endl;
+    } else if (term == "filter") {
+      std::cout << "'filter' will limit the current words using a pattern or restrictions.\n"
+        << "Format: filter {pattern/restrictions...}\n"
+        << "  {pattern} is a series of letters of . for wildcard.\n"
+        << "  {restrictions} are optional '+' or '-' followed by letters the either\n"
+        << "      must be in the word or must not be, respectively.\n"
+        << "Example: filter q...e +t\n"
+        << "  would give 'quite' and 'quote' with the base word set.\n"
         << std::endl;
     } else if (term == "find") {
       std::cout << "'find' will search the current words for a pattern, using restrictions.\n"
@@ -207,6 +216,76 @@ public:
               << std::endl;
   }
 
+  void CommandFilter(const emp::vector<std::string> & args) {
+    if (args.size() < 2) {
+      Error("Must include at least one argument to filter on.");
+      return;
+    }
+    std::string pattern = std::string(word_size, '.'); // Default pattern is all dots.
+    emp::array<size_t, 26> include_count{};
+    emp::array<size_t, 26> exclude_count{};
+
+
+    // Step through arguments.
+    for (size_t i = 1; i < args.size(); ++i) {
+      char let1 = args[i][0];
+      // INCLUSION -- letters that MUST be in the word.
+      if (let1 == '+') {
+        for (size_t j = 1; j < args[i].size(); ++j) {
+          char let = args[i][j];
+          if (!emp::is_lower_letter(let)) {
+            Error("Inclusions in filter must be lowercase; not '", let, "'.");
+            return;
+          }
+          include_count[ static_cast<size_t>(let - 'a') ]++;
+        }
+      }
+      // EXCLUSION -- letters that cannot be in the word.
+      else if (let1 == '-') {
+        for (size_t j = 1; j < args[i].size(); ++j) {
+          char let = args[i][j];
+          if (!emp::is_lower_letter(let)) {
+            Error("Exclusions in filter must be lowercase; not '", let, "'.");
+            return;
+          }
+          exclude_count[ static_cast<size_t>(let - 'a') ]++;
+        }
+      }
+      // PATTERN -- letters that must be in specific positions.
+      else if (let1 == '.' || emp::is_lower_letter(let1)) {
+        pattern = args[i];
+        if (pattern.size() != word_size) {
+          Error("Pattern in filter must be word size (", word_size, "); received '", pattern, "'");
+          return;
+        }
+        for (char x : args[i]) {
+          if (x != '.' && !emp::is_lower_letter(x)) {
+            Error("Pattern in filter must be letters or '.'; received '", pattern, "'");
+            return;
+          }
+        }
+      }
+      // UNKNOWN
+      else {
+        Error("Requirements with find must begin with '+' or '-', not '", args[i][0], "'.");
+        return;
+      }
+    }
+
+    // Build clean include and exclude strings.
+    std::string include;
+    std::string exclude;
+    for (size_t i = 0; i < 26; ++i) {
+      for (size_t j = 0; j < include_count[i]; ++j) include.push_back('a'+i);
+      if (exclude_count[i]) exclude.push_back('a'+i);
+    }
+
+    // And make the call.
+    auto cur_words = word_set.FilterCurWords(pattern, include, exclude);
+    word_set.SetOptions(cur_words);
+    std::cout << "Filtered down to " << cur_words.GetSize() << " words." << std::endl;
+  }
+  
   void CommandFind(const emp::vector<std::string> & args) {
     if (args.size() < 2) {
       Error("Must include a pattern with find.  Eg: a..e.");
@@ -256,7 +335,7 @@ public:
 
     // And make the call.
     auto out_words = word_set.FilterCurWords(pattern, include, exclude);
-    word_set.WriteWords(out_words, 100);
+    word_set.WriteWords(out_words.AsList(), 100);
   }
 
   void CommandLoad(const std::string & filename, size_t in_size) {
@@ -393,7 +472,11 @@ public:
       CommandDict(sort, count, output);
     }
 
-    else if (args[0] == "find" || args[0] == "f") {
+    else if (args[0] == "filter" || args[0] == "f") {
+      CommandFilter(args);
+    }
+
+    else if (args[0] == "find" || args[0] == "F") {
       CommandFind(args);
     }
 
