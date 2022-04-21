@@ -62,9 +62,9 @@ public:
       << "                  format: clue [word] [result]\n"
       << "   dict       [d] list all words from the full dictionary.\n"
       << "                  format: dict [sort=alpha] [count=10] [output=screen]\n"
-      << "   grep       [g] search current words for a pattern."
+      << "   find       [f] search current words for a pattern."
       << "                  use . for wildcard; follow with + for anywhere and - for nowhere"
-      << "                    e.g.: analyze grep a..e. -pri +s"
+      << "                    e.g.:   find a..e. -pri +s"
       << "                  to give words like aloes, asked, asset, etc."
       << "   help       [h] provide addition information about a command.\n"
       << "                  format: help [command]\n"
@@ -111,6 +111,15 @@ public:
         << "         Place an 'r-' in front of a sorting method to reverse it.\n"
         << "  [count] is the maximum number of words to print (10 by default).\n"
         << "  [output] prints to the filename provided (e.g, 'data.csv') or to the 'screen'.\n"
+        << std::endl;
+    } else if (term == "find") {
+      std::cout << "'find' will search the current words for a pattern, using restrictions.\n"
+        << "Format: find [pattern] {restrictions}\n"
+        << "  [pattern] is a series of letters of . for wildcard.\n"
+        << "  {restrictions} are optional '+' or '-' followed by letters the either\n"
+        << "      must be in the word or must not be, respectively.\n"
+        << "Example: find q...e +t\n"
+        << "  would give 'quite' and 'quote' with the base word set.\n"
         << std::endl;
     } else if (term == "quit") {
       std::cout << "'quit' will exit the program.\n" << std::endl;
@@ -196,6 +205,58 @@ public:
     std::cout << "There are " << word_set.GetOptions().size()
               << " possible words remaining (of " << word_set.GetSize() << " total)."
               << std::endl;
+  }
+
+  void CommandFind(const emp::vector<std::string> & args) {
+    if (args.size() < 2) {
+      Error("Must include a pattern with find.  Eg: a..e.");
+      return;
+    }
+    std::string pattern = args[1];
+    if (pattern.size() != word_size) {
+      Error("Pattern with find must be word size (", word_size, "); received '", pattern, "'");
+      return;
+    }
+
+    emp::array<size_t, 26> include_count{};
+    emp::array<size_t, 26> exclude_count{};
+
+    for (size_t i = 2; i < args.size(); ++i) {
+      if (args[i][0] == '+') {
+        for (size_t j = 1; j < args[i].size(); ++j) {
+          char let = args[i][j];
+          if (!emp::is_lower_letter(let)) {
+            Error("Inclusions in find must be lowercase; not '", let, "'.");
+            return;
+          }
+          include_count[ static_cast<size_t>(let - 'a') ]++;
+        }
+      } else if (args[i][0] == '-') {
+        for (size_t j = 1; j < args[i].size(); ++j) {
+          char let = args[i][j];
+          if (!emp::is_lower_letter(let)) {
+            Error("Exclusions in find must be lowercase; not '", let, "'.");
+            return;
+          }
+          exclude_count[ static_cast<size_t>(let - 'a') ]++;
+        }
+      } else {
+        Error("Requirements with find must begin with '+' or '-', not '", args[i][0], "'.");
+        return;
+      }
+    }
+
+    // Build clean include and exclude strings.
+    std::string include;
+    std::string exclude;
+    for (size_t i = 0; i < 26; ++i) {
+      for (size_t j = 0; j < include_count[i]; ++j) include.push_back('a'+i);
+      if (exclude_count[i]) exclude.push_back('a'+i);
+    }
+
+    // And make the call.
+    auto out_words = word_set.FilterCurWords(pattern, include, exclude);
+    word_set.WriteWords(out_words, 100);
   }
 
   void CommandLoad(const std::string & filename, size_t in_size) {
@@ -330,6 +391,10 @@ public:
       size_t count       = (args.size() > 2) ? std::stoul(args[2]) : 10;
       std::string output = (args.size() > 3) ? args[3] : "screen";
       CommandDict(sort, count, output);
+    }
+
+    else if (args[0] == "find" || args[0] == "f") {
+      CommandFind(args);
     }
 
     else if (args[0] == "help" || args[0] == "h") {
