@@ -86,6 +86,12 @@ public:
     return *this;
   }
 
+  // Union
+  IDSet & operator|=(const IDSet & in) {
+    bit_ids |= in.bit_ids;
+    return *this;
+  }
+
   // Removal
   IDSet & operator-=(IDSet & in) {
     bit_ids &= ~in.bit_ids;
@@ -366,19 +372,64 @@ public:
     return true;
   }
 
+  // Keep only words that match the provided pattern
+  IDSet FilterPattern(const IDSet & ids, const std::string & pattern) const {
+    IDSet out_ids = ids;
+
+    size_t pattern_pos = 0;
+    for (size_t word_pos = 0; word_pos < word_size; ++word_pos) {
+      // If we have a dot, this position can be anything.  Keep going.
+      if (pattern[pattern_pos] == '.') { ++pattern_pos; continue; }
+
+      // If we have a letter, lock it.
+      else if (emp::is_letter(pattern[pattern_pos])) {
+        out_ids &= pos_clues[word_pos].here[ ToID(pattern[pattern_pos]) ];
+        ++pattern_pos; // Most ahead only a single position.
+      }
+
+      // If we have a collection, use it.
+      else if (pattern[pattern_pos] == '[') {
+        size_t end_pos = emp::find_paren_match(pattern, pattern_pos, '[', ']');
+        if (end_pos == pattern_pos) {
+          std::cout << "ERROR: Unclosed char set in pattern." << std::endl;
+          return ids;
+        }
+        IDSet set_ids(ids.GetSize());
+        for (size_t i = pattern_pos+1; i < end_pos; ++i) {
+          char letter_option = pattern[i];
+          if (!emp::is_letter(letter_option)) {
+            std::cout << "ERROR: Non-letter in char set of pattern." << std::endl;
+            return ids;
+          }
+          set_ids |= pos_clues[word_pos].here[ ToID(letter_option) ];
+        }
+        out_ids &= set_ids;  // Only those words from the set are allowed!
+        pattern_pos = end_pos+1;
+      }
+
+      // If we made it this far, we have an error.
+      else {
+        std::cout << "ERROR: Unknown char '" << pattern[pattern_pos] << "' in char set of pattern." << std::endl;
+        return ids;
+      }
+    }
+
+    return out_ids;    
+  }
+
   IDSet FilterWords(
     const IDSet & ids,
     const std::string & pattern,
     const std::string & include="",
     const std::string & exclude=""
   ) const {
-    IDSet out_ids = ids;
+    IDSet out_ids = FilterPattern(ids, pattern);
 
-    // Limit based on pattern.
-    for (size_t i = 0; i < pattern.size(); ++i) {
-      if (pattern[i] == '.') continue;
-      out_ids &= pos_clues[i].here[ ToID(pattern[i]) ];
-    }
+    // // Limit based on pattern.
+    // for (size_t i = 0; i < pattern.size(); ++i) {
+    //   if (pattern[i] == '.') continue;
+    //   out_ids &= pos_clues[i].here[ ToID(pattern[i]) ];
+    // }
 
     // Limit based on includes.  Count the number of each letter, and at least that
     // many must be in the result.
