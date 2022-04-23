@@ -255,16 +255,6 @@ public:
       // PATTERN -- letters that must be in specific positions.
       else if (let1 == '.' || emp::is_lower_letter(let1)) {
         pattern = args[i];
-        if (pattern.size() != word_size) {
-          Error("Pattern in filter must be word size (", word_size, "); received '", pattern, "'");
-          return;
-        }
-        for (char x : args[i]) {
-          if (x != '.' && !emp::is_lower_letter(x)) {
-            Error("Pattern in filter must be letters or '.'; received '", pattern, "'");
-            return;
-          }
-        }
       }
       // UNKNOWN
       else {
@@ -285,7 +275,12 @@ public:
     auto cur_words = word_set.FilterCurWords(pattern, include, exclude);
     word_set.SetOptions(cur_words);
     std::cout << "Filtered down to " << cur_words.GetSize() << " words." << std::endl;
-    clues.emplace_back(emp::to_string(emp::combine_strings(args)), Result(word_size,0), true);
+    std::string filter_str;
+    for (size_t i = 1; i < args.size(); ++i) {
+      if (i>1) filter_str += " ";
+      filter_str += args[i];
+    }
+    clues.emplace_back(filter_str, Result(), true);
   }
   
   void CommandFind(const emp::vector<std::string> & args) {
@@ -527,6 +522,8 @@ public:
               if (filters[0] == '-') exclude = emp::string_pop_word(filters);
               else pattern = emp::string_pop_word(filters);
             }
+            emp::remove_chars(include,"+");
+            emp::remove_chars(exclude,"-");
             word_set.FilterCurWords(pattern, include, exclude);
           }
           // Otherwise process it as a proper clue.
