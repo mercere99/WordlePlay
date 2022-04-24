@@ -253,7 +253,7 @@ public:
         }
       }
       // PATTERN -- letters that must be in specific positions.
-      else if (let1 == '.' || emp::is_lower_letter(let1)) {
+      else if (let1 == '.' || emp::is_lower_letter(let1) || let1 == '[') {
         pattern = args[i];
       }
       // UNKNOWN
