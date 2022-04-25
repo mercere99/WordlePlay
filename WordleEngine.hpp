@@ -23,11 +23,13 @@ private:
 
 public:
   IDSet() { }
-  IDSet(size_t count) : bit_ids(count) { bit_ids.SetAll(); }
-  IDSet(const IDList & _ids, int start_id, int end_id, size_t count)
+  IDSet(size_t count, bool start_included=true) : bit_ids(count) {
+    if (start_included) bit_ids.SetAll();
+  }
+  IDSet(const IDList & _ids, size_t start_id, size_t end_id, size_t count)
     : bit_ids(count)
   {
-    for (int i = start_id; i < end_id; ++i) bit_ids.Set(_ids[i]);
+    for (size_t i = start_id; i < end_id; ++i) bit_ids.Set(_ids[i]);
   }
   IDSet(const IDSet &) = default;
   IDSet(IDSet &&) = default;
@@ -37,6 +39,7 @@ public:
 
   size_t size() const { return bit_ids.CountOnes(); }
   size_t GetSize() const { return size(); }
+  size_t GetSetSize() const { return bit_ids.GetSize(); }
 
   void Resize(size_t count) { bit_ids.Resize(count); }
 
@@ -126,7 +129,9 @@ struct IDGroups {
 
   void AddGroup(const IDSet & new_group) {
     starts.push_back(num_ids);
-    for (int id = new_group.GetFirstID(); id != (uint16_t) -1; id = new_group.GetNextID(id)) {
+    for (int id = new_group.GetFirstID();
+         id != (uint16_t) -1;
+         id = new_group.GetNextID(id)) {
       ids[num_ids++] = static_cast<uint16_t>(id);
     }
   }
@@ -374,27 +379,34 @@ public:
 
   // Keep only words that match the provided pattern
   IDSet FilterPattern(const IDSet & ids, const std::string & pattern) const {
+    std::cout << "Filtering..." << std::endl;
+
     IDSet out_ids = ids;
 
     size_t pattern_pos = 0;
     for (size_t word_pos = 0; word_pos < word_size; ++word_pos) {
+      char key_char = pattern[pattern_pos];
+
       // If we have a dot, this position can be anything.  Keep going.
-      if (pattern[pattern_pos] == '.') { ++pattern_pos; continue; }
+      if (key_char == '.') {
+        ++pattern_pos;
+        continue;
+      }
 
       // If we have a letter, lock it.
-      else if (emp::is_letter(pattern[pattern_pos])) {
-        out_ids &= pos_clues[word_pos].here[ ToID(pattern[pattern_pos]) ];
+      else if (emp::is_letter(key_char)) {
+        out_ids &= pos_clues[word_pos].here[ ToID(key_char) ];
         ++pattern_pos; // Most ahead only a single position.
       }
 
       // If we have a collection, use it.
-      else if (pattern[pattern_pos] == '[') {
+      else if (key_char == '[') {
         size_t end_pos = emp::find_paren_match(pattern, pattern_pos, '[', ']');
         if (end_pos == pattern_pos) {
           std::cout << "ERROR: Unclosed char set in pattern." << std::endl;
           return ids;
         }
-        IDSet set_ids(ids.GetSize());
+        IDSet set_ids(ids.GetSetSize(), false);
         for (size_t i = pattern_pos+1; i < end_pos; ++i) {
           char letter_option = pattern[i];
           if (!emp::is_letter(letter_option)) {
@@ -409,7 +421,7 @@ public:
 
       // If we made it this far, we have an error.
       else {
-        std::cout << "ERROR: Unknown char '" << pattern[pattern_pos] << "' in char set of pattern." << std::endl;
+        std::cout << "ERROR: Unknown char '" << key_char << "' in char set of pattern." << std::endl;
         return ids;
       }
     }
