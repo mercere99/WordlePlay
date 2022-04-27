@@ -367,6 +367,29 @@ public:
     std::cout << emp::ANSI_Reset() << "\n";
   }
 
+  void CommandPop() {
+    std::cout << "Regenerating results without final clue." << std::endl;
+    clues.pop_back();                           // Remove last clue.
+    word_set.ResetOptions();                    // Reset available words.
+    for (auto clue : clues) {                   // Add remaining clues.
+      // If this clue is a filter, reconstruct it.
+      if (clue.is_filter) {
+        std::string filters = clue.word;
+        std::string pattern(word_size,'.'), include, exclude;
+        while (filters.size()) {
+          if (filters[0] == '+') include = emp::string_pop_word(filters);
+          if (filters[0] == '-') exclude = emp::string_pop_word(filters);
+          else pattern = emp::string_pop_word(filters);
+        }
+        emp::remove_chars(include,"+");
+        emp::remove_chars(exclude,"-");
+        word_set.FilterCurWords(pattern, include, exclude);
+      }
+      // Otherwise process it as a proper clue.
+      else word_set.AddClue(clue.word, clue.result);
+    }
+  }
+
   void CommandStatus() {
     if (clues.size() == 0) {
       std::cout << "No clues currently enforced.\n";
@@ -508,28 +531,7 @@ public:
 
     else if (args[0] == "pop" || args[0] == "p") {
       if (clues.size() == 0) Error("Error: No clues to pop.");
-      else {
-        std::cout << "Regenerating results without final clue." << std::endl;
-        clues.pop_back();                           // Remove last clue.
-        word_set.ResetOptions();                    // Reset available words.
-        for (auto clue : clues) {                   // Add remaining clues.
-          // If this clue is a filter, reconstruct it.
-          if (clue.is_filter) {
-            std::string filters = clue.word;
-            std::string pattern(word_size,'.'), include, exclude;
-            while (filters.size()) {
-              if (filters[0] == '+') include = emp::string_pop_word(filters);
-              if (filters[0] == '-') exclude = emp::string_pop_word(filters);
-              else pattern = emp::string_pop_word(filters);
-            }
-            emp::remove_chars(include,"+");
-            emp::remove_chars(exclude,"-");
-            word_set.FilterCurWords(pattern, include, exclude);
-          }
-          // Otherwise process it as a proper clue.
-          else word_set.AddClue(clue.word, clue.result);
-        }
-      }
+      else CommandPop();
     }
 
     else if (args[0] == "quit" || args[0] == "exit" || args[0] == "q") return false;
