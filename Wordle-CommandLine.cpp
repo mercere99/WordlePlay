@@ -74,7 +74,7 @@ public:
       << "   pop        [p] remove most recently added clue.\n"
       << "   quit       [q] exit the program.\n"
       << "   reset      [r] erase all current clues.\n"
-      << "   status     [s] show the current clue stack.\n"
+      << "   status     [.] show the current clue stack.\n"
       << "   transcript [t] print a history of all prior commands.\n"
       << "   words      [w] list top legal words (type 'help words' for full information).\n"
       << "                  format: words [sort=alpha] [count=10] [output=screen]\n"
@@ -542,7 +542,7 @@ public:
       word_set.ResetOptions();
     }
 
-    else if (args[0] == "status" || args[0] == "s") {
+    else if (args[0] == "status" || args[0] == ".") {
       CommandStatus();
     }
 
