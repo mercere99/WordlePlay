@@ -31,6 +31,7 @@ private:
       : word(_w), result(_r), is_filter(_f) { }
   };
   emp::vector<Clue> clues;
+  std::unordered_map<std::string, IDSet> word_sets;
 
   template <typename... Ts>
   void Error(Ts... args) {
@@ -74,6 +75,8 @@ public:
       << "   pop        [p] remove most recently added clue.\n"
       << "   quit       [q] exit the program.\n"
       << "   reset      [r] erase all current clues.\n"
+      << "   save       [s] save the current word list to the provided name.\n"
+      << "                  format: save [list_name]\n"
       << "   status     [.] show the current clue stack.\n"
       << "   transcript [t] print a history of all prior commands.\n"
       << "   words      [w] list top legal words (type 'help words' for full information).\n"
@@ -136,7 +139,11 @@ public:
     } else if (term == "reset") {
       std::cout << "'reset' will erase all state; same as restarting the program.\n" << std::endl;
     } else if (term == "status") {
-      std::cout << "'status' will print out all of the clues you have entered so far.\n" << std::endl;
+      std::cout << "'status' will print out all of the clues you have entered so far.\n"
+        << "Format: save [list name]\n"
+        << std::endl;
+    } else if (term == "save") {
+      std::cout << "'save' will store the current word list to the provided variable name\n" << std::endl;
     } else if (term == "transcript") {
       std::cout << "'transcript' will print out a history of all prior commands.\n" << std::endl;
     } else if (term == "words") {
@@ -539,7 +546,26 @@ public:
     else if (args[0] == "reset" || args[0] == "r") {
       std::cout << "Clearing all current clues." << std::endl;
       clues.resize(0);
-      word_set.ResetOptions();
+      if (args.size() == 1) word_set.ResetOptions();
+      else {
+        if (word_sets.find(args[1]) == word_sets.end()) {
+          Error("'reset' is followed by an invalid word list '", args[1], "'");
+        }
+        else {
+          word_set.SetOptions( word_sets[args[1]] );
+          std::cout << "Reset to word list '" << args[1] << "' with "
+            << word_set.GetOptions().GetSize() << " words." << std::endl;
+        }
+      }
+    }
+
+    else if (args[0] == "save" || args[0] == "s") {
+      if (args.size() != 2) Error("'save' requires a name to call the word list.");
+      else {
+        word_sets[args[1]] = word_set.GetOptions();
+        std::cout << "Saving " << word_set.GetOptions().GetSize()
+                  << " words into '" << args[1] << std::endl;
+      }
     }
 
     else if (args[0] == "status" || args[0] == ".") {
