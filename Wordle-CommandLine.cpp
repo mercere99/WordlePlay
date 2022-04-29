@@ -564,7 +564,7 @@ public:
       else {
         word_sets[args[1]] = word_set.GetOptions();
         std::cout << "Saving " << word_set.GetOptions().GetSize()
-                  << " words into '" << args[1] << std::endl;
+                  << " words into '" << args[1] << "'." << std::endl;
       }
     }
 
