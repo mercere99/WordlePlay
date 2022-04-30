@@ -847,12 +847,13 @@ public:
         const std::string & word = words[id].word;
         letters[ ToID(word[pos]) ] = true;
       }
-      std::cout << " ";
+      std::cout << "[";
       for (size_t i = 0; i < 26; ++i){
         if (letters[i]) std::cout << ToLetter(i);
       }
-      std::cout << std::endl;
+      std::cout << "]";
     }
+    std::cout << std::endl;
   }
 
   void AnalyzePairs() {
