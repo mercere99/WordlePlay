@@ -576,6 +576,15 @@ public:
       CommandTranscript();
     }
 
+    else if (args[0] == "vars" || args[0] == "v") {
+      // Allow arguments like "clear" or "show" with var names?
+      // if (args.size() > 1) 
+      std::cout << "Current variables:\n";
+      for (auto& [name, cur_set] : word_sets) {
+        std::cout << "  " << name << " : " << cur_set.GetSize() << " words." << std::endl;
+      }
+    }
+
     else if (args[0] == "words" || args[0] == "w") {
       std::string sort   = (args.size() > 1) ? args[1] : "alpha";
       size_t count       = (args.size() > 2) ? std::stoul(args[2]) : 10;
