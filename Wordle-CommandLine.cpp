@@ -149,7 +149,7 @@ public:
       std::cout << "'transcript' will print out a history of all prior commands.\n" << std::endl;
     } else if (term == "vars") {
       std::cout << "'vars' will print out all currently saved wordlist variables, indicating the\n"
-      >>           "number of words included in each.\n" << std::endl;
+                << "number of words included in each.\n" << std::endl;
     } else if (term == "words") {
       std::cout << "The 'words' command outputs all words that meet the current clues.\n"
         << "Format: words [sort=alpha] [count=10] [output=screen]\n"
@@ -581,11 +581,27 @@ public:
     }
 
     else if (args[0] == "vars" || args[0] == "v") {
-      // Allow arguments like "clear" or "show" with var names?
-      // if (args.size() > 1) 
-      std::cout << "Current variables:\n";
-      for (auto& [name, cur_set] : word_sets) {
-        std::cout << "  " << name << " : " << cur_set.GetSize() << " words." << std::endl;
+      // Check for argment modifiers.
+      if (args.size() > 1) {
+        if (args[1] == "c" || args[1] == "clear") {
+          word_sets.clear();
+        }
+        else if (args[1] == "s" || args[1] == "show") {
+          if (args.size() <= 2) Error("Command 'vars show' must include a variable name.");
+          else if (word_sets.find(args[2]) == word_sets.end()) {
+            Error("Unknown variable '", args[2], "'.");
+          }
+          else {
+            std::cout << "  " << args[2] << " : " << word_sets[args[2]].GetSize() << " words." << std::endl;
+          }
+        }
+        else Error("Unknown vars directive '", args[1], "'.");
+      }
+      else {
+        std::cout << "Current variables:\n";
+        for (auto& [name, cur_set] : word_sets) {
+          std::cout << "  " << name << " : " << cur_set.GetSize() << " words." << std::endl;
+        }
       }
     }
 
