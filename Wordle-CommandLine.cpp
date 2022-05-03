@@ -583,8 +583,18 @@ public:
     else if (args[0] == "vars" || args[0] == "v") {
       // Check for argment modifiers.
       if (args.size() > 1) {
-        if (args[1] == "c" || args[1] == "clear") {
-          word_sets.clear();
+        if (args[1] == "c" || args[1] == "clear") {          
+          if (args.size() <= 2) {
+            std::cout << "Clearing all saved variables." << std::endl;
+            word_sets.clear();
+          }
+          else if (word_sets.find(args[2]) == word_sets.end()) {
+            Error("Unknown variable to clear '", args[2], "'.");
+          }
+          else {
+            std::cout << "Clearing variable '" << args[2] << "'." << std::endl;
+            word_sets.erase(args[2]);
+          }
         }
         else if (args[1] == "s" || args[1] == "show") {
           if (args.size() <= 2) Error("Command 'vars show' must include a variable name.");
