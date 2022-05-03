@@ -79,6 +79,7 @@ public:
       << "                  format: save [list_name]\n"
       << "   status     [.] show the current clue stack.\n"
       << "   transcript [t] print a history of all prior commands.\n"
+      << "   vars       [v] list all current saved variables.\n"
       << "   words      [w] list top legal words (type 'help words' for full information).\n"
       << "                  format: words [sort=alpha] [count=10] [output=screen]\n"
       << "Single character shortcut given in brackets for each commenand.\n"
@@ -146,6 +147,9 @@ public:
       std::cout << "'save' will store the current word list to the provided variable name\n" << std::endl;
     } else if (term == "transcript") {
       std::cout << "'transcript' will print out a history of all prior commands.\n" << std::endl;
+    } else if (term == "vars") {
+      std::cout << "'vars' will print out all currently saved wordlist variables, indicating the\n"
+      >>           "number of words included in each.\n" << std::endl;
     } else if (term == "words") {
       std::cout << "The 'words' command outputs all words that meet the current clues.\n"
         << "Format: words [sort=alpha] [count=10] [output=screen]\n"
