@@ -16,6 +16,7 @@
 #include "Result.hpp"
 
 using IDList = emp::vector<uint16_t>;
+using letter_options_t = emp::vector< emp::array<char, 26> > ;
 
 class IDSet {
 private:
@@ -839,21 +840,38 @@ public:
               << std::endl;
   }
 
-  void AnalyzeLoci() {
-    auto ids = cur_options.GetSorted();
+  // Determine the letter options for s provided IDList.
+  letter_options_t AnalyzeLoci(const IDList & ids) {
+    letter_options_t options;
+
+    // Loop through each position, determining available letters...
     for (size_t pos = 0; pos < word_size; ++pos) {
       emp::array<char, 26> letters{};
       for (size_t id : ids) {
         const std::string & word = words[id].word;
         letters[ ToID(word[pos]) ] = true;
       }
+      options.push_back(letters);
+    }
+    return options;
+  }
+
+  // Determine an print the letter options for the current set of words.
+  void AnalyzeLoci() {
+    auto options = AnalyzeLoci(cur_options.GetSorted());
+    for (size_t pos = 0; pos < word_size; ++pos) {
       std::cout << "[";
       for (size_t i = 0; i < 26; ++i){
-        if (letters[i]) std::cout << ToLetter(i);
+        if (options[pos][i]) std::cout << ToLetter(i);
       }
       std::cout << "]";
     }
     std::cout << std::endl;
+  }
+
+  // Do a full analysis of solutions to a squareword.
+  void AnalyzeSquareword(emp::vector<IDSet> & clues) {
+    std::cout << "Analyzing Squareword..." << std::endl;
   }
 
   void AnalyzePairs() {
@@ -922,7 +940,6 @@ public:
       }
     }
   }
-
 
   void AnalyzeTriples() {
     // Sort words by max individual information.
