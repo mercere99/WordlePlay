@@ -443,7 +443,7 @@ public:
     return true; // All options must have matched!
   }
 
-  // Filter using a patter of letter options.
+  // Filter sets using a pattern of letter options.
   IDSet FilterPattern(const IDSet & ids, const letter_options_t & options) const {
     std::cout << "Filtering..." << std::endl;
 
@@ -453,6 +453,22 @@ public:
     for (size_t id = 0; id < ids.size(); ++id) {
       // If id if in the input set and a viable options, keep it.
       if (ids[id] && TestOption(words[id].word, options)) out_ids.Add(id);
+    }
+
+    return out_ids;
+  }
+
+  // Filter lists using a pattern of letter options.
+  IDList FilterPattern(const IDList & ids, const letter_options_t & options) const {
+    emp_assert(word_size == options.size(), word_size, options.size());
+
+    std::cout << "Filtering..." << std::endl;
+
+    IDList out_ids;
+
+    // Test each word in ids; if they match, move them to out_ids.
+    for (size_t id : ids) {
+      if (TestOption(words[id].word, options)) out_ids.push_back(id);
     }
 
     return out_ids;
@@ -900,15 +916,23 @@ public:
   }
 
   // Do a full analysis of solutions to a squareword.
-  void AnalyzeSquareword(emp::vector<IDSet> & clues) {
+  void AnalyzeSquareword(emp::vector<IDList> & row_word_options) {
     std::cout << "Analyzing Squareword..." << std::endl;
 
     // Initially, positions can have any letter option.
-    emp::vector<letter_options_t> row_options;
-    for (auto & row : row_options) {
+    emp::vector<letter_options_t> row_letter_options(word_size);
+    for (auto & row : row_letter_options) {
+      row.resize(word_size);
       for (auto & pos : row) {
         pos = all_letters;
       }
+    }
+
+    // Columns should start with a full word list.
+    emp::vector<IDList> col_word_options(word_size);
+    for (auto & opts : col_word_options) {
+      opts.resize(words.size());
+      for (uint16_t id = 0; id < words.size(); ++id) opts[id] = id;
     }
 
     // While we are making progress, keep limiting options.
@@ -918,9 +942,51 @@ public:
 
       // Scan through all rows.
       for (size_t row_id = 0; row_id < word_size; ++row_id) {
-        row_options[row_id];
+        IDList & cur_row_opts = row_word_options[row_id];
+        IDList new_word_opts = FilterPattern(cur_row_opts, row_letter_options[row_id]);
+        if (new_word_opts != cur_row_opts) {
+          progress = true;
+          cur_row_opts = new_word_opts;
+          row_letter_options[row_id] = AnalyzeLoci(cur_row_opts);
+        }
       }
+
+      // Next, scan through all of the columns.
+      for (size_t col_id = 0; col_id < word_size; ++col_id) {
+        // Setup the letter options for this column.
+        letter_options_t col_letter_options(word_size);
+        for (size_t row_id = 0; row_id < word_size; ++row_id) {
+          col_letter_options[row_id] = row_letter_options[row_id][col_id];
+        }
+        
+        IDList & cur_col_opts = col_word_options[col_id];
+        IDList new_word_opts = FilterPattern(cur_col_opts, col_letter_options);
+        if (new_word_opts != cur_col_opts) {
+          progress = true;
+          cur_col_opts = new_word_opts;
+          col_letter_options = AnalyzeLoci(cur_col_opts);
+          for (size_t row_id = 0; row_id < word_size; ++row_id) {
+            row_letter_options[row_id][col_id] = col_letter_options[row_id];
+          }
+        }
+      }
+
     }
+
+    // If we made it this far, we have no more progress to make... Print results!
+    std::cout << "Results\n";
+    for (size_t row = 0; row < word_size; ++row) {
+      for (size_t col = 0; col < word_size; ++col) {
+        std::cout << "[";
+        for (size_t let = 0; let < 26; ++let) {
+          if (row_letter_options[row][col][let]) std::cout << ToLetter(let);
+        }
+        std::cout << "]";
+      }
+      std::cout << " : " << row_word_options[row].size() << " words.\n";
+    }
+    std::cout << std::endl;
+
   }
 
   void AnalyzePairs() {
