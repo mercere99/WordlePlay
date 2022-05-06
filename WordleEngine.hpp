@@ -323,6 +323,8 @@ private:
 
   double progress = 0.0;             // Fraction of progess on loading a file.
 
+  emp::array<char, 26> all_letters = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+
 public:
   WordleEngine(size_t _word_size)
   : word_size(_word_size)
@@ -429,6 +431,34 @@ public:
 
     return out_ids;    
   }
+
+  // Determine if a word fits the provided letter options.
+  bool TestOption(const std::string & word, const letter_options_t & options) const {
+    emp_assert(word.size() == options.size(), word.size(), options.size());
+
+    for (size_t pos = 0; pos < word.size(); ++pos) {
+      const uint16_t let_id = ToID(word[pos]);
+      if (options[pos][let_id] == 0) return false;
+    }
+    return true; // All options must have matched!
+  }
+
+  // Filter using a patter of letter options.
+  IDSet FilterPattern(const IDSet & ids, const letter_options_t & options) const {
+    std::cout << "Filtering..." << std::endl;
+
+    IDSet out_ids;
+
+    // Test each word in ids; if they match, move them to out_ids.
+    for (size_t id = 0; id < ids.size(); ++id) {
+      // If id if in the input set and a viable options, keep it.
+      if (ids[id] && TestOption(words[id].word, options)) out_ids.Add(id);
+    }
+
+    return out_ids;
+  }
+
+
 
   IDSet FilterWords(
     const IDSet & ids,
@@ -872,6 +902,25 @@ public:
   // Do a full analysis of solutions to a squareword.
   void AnalyzeSquareword(emp::vector<IDSet> & clues) {
     std::cout << "Analyzing Squareword..." << std::endl;
+
+    // Initially, positions can have any letter option.
+    emp::vector<letter_options_t> row_options;
+    for (auto & row : row_options) {
+      for (auto & pos : row) {
+        pos = all_letters;
+      }
+    }
+
+    // While we are making progress, keep limiting options.
+    bool progress = true;
+    while (progress) {
+      progress = false;
+
+      // Scan through all rows.
+      for (size_t row_id = 0; row_id < word_size; ++row_id) {
+        row_options[row_id];
+      }
+    }
   }
 
   void AnalyzePairs() {
