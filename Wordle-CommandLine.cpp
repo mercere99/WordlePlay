@@ -93,8 +93,9 @@ public:
         << "Format: analyze [command] {extra...}\n"
         << "  [command] determines the specific analysis to perform.  Options are:\n"
         << "            'loci'    [l] to list possible letters at each position (w/current words).\n"
-        << "            'stats'   [s] to output statistics about the words that follow.\n"
         << "            'pairs'   [p] to scan through data for all pairs of words.\n"
+        << "            'square'  [q] to analyze a squareword puzzle; must list one variable per row."
+        << "            'stats'   [s] to output statistics about the words that follow.\n"
         << "            'triples' [t] to scan through data for all sets of 3 words.\n"
         << "            (...more to come...)\n)"
         << std::endl;
@@ -188,6 +189,26 @@ public:
     else if (mode == "pairs" || mode == "p") {
       std::cout << "== Analyzing Pairs ==" << std::endl;
       word_set.AnalyzePairs();
+    }
+    else if (mode == "squareword" || mode == "q") {
+      std::cout << "== Analyzing Squareword ==" << std::endl;
+      if (args.size() < word_size + 2) {
+        Error("Analysis of a squareword requires wordsize (", word_size,
+              ") word_list\nvariables to be provided, one for each row.");
+      } else {
+        // Make sure all variables are real.
+        emp::vector<IDList> rows;
+        for (size_t i = 2; i < word_size+2; ++i) {
+          if (word_sets.find(args[i]) == word_sets.end()) {
+            Error("Unknown variable in analyze squareword: '", args[i], "'.");
+          }
+          else rows.push_back(word_sets[args[i]].AsList());
+        }
+
+        if (rows.size() == word_size) {
+          word_set.AnalyzeSquareword(rows);
+        }
+      }
     }
     else if (mode == "stats" || mode == "s") {
       args.erase(args.begin(), args.begin()+2); // Remove first two args from input.
