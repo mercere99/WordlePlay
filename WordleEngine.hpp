@@ -323,8 +323,6 @@ private:
 
   double progress = 0.0;             // Fraction of progess on loading a file.
 
-  emp::array<char, 26> all_letters = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
-
 public:
   WordleEngine(size_t _word_size)
   : word_size(_word_size)
@@ -919,13 +917,10 @@ public:
   void AnalyzeSquareword(emp::vector<IDList> & row_word_options) {
     std::cout << "Analyzing Squareword..." << std::endl;
 
-    // Initially, positions can have any letter option.
+    // Determine initial letter options.
     emp::vector<letter_options_t> row_letter_options(word_size);
-    for (auto & row : row_letter_options) {
-      row.resize(word_size);
-      for (auto & pos : row) {
-        pos = all_letters;
-      }
+    for (size_t row_id = 0; row_id < word_size; ++row_id) {
+      row_letter_options[row_id] = AnalyzeLoci(row_word_options[row_id]);
     }
 
     // Columns should start with a full word list.
@@ -944,8 +939,13 @@ public:
       for (size_t row_id = 0; row_id < word_size; ++row_id) {
         IDList & cur_row_opts = row_word_options[row_id];
         IDList new_word_opts = FilterPattern(cur_row_opts, row_letter_options[row_id]);
+
+        // Test if we made progress...
         if (new_word_opts != cur_row_opts) {
           progress = true;
+          std::cout << "Progress on row " << row_id << " from "
+            << cur_row_opts.size() << " to " << new_word_opts.size() << " words."
+            << std::endl;
           cur_row_opts = new_word_opts;
           row_letter_options[row_id] = AnalyzeLoci(cur_row_opts);
         }
@@ -961,8 +961,13 @@ public:
         
         IDList & cur_col_opts = col_word_options[col_id];
         IDList new_word_opts = FilterPattern(cur_col_opts, col_letter_options);
+
+        // Test if we made progress...
         if (new_word_opts != cur_col_opts) {
           progress = true;
+          std::cout << "Progress on col " << col_id << " from "
+            << cur_col_opts.size() << " to " << new_word_opts.size() << " words."
+            << std::endl;
           cur_col_opts = new_word_opts;
           col_letter_options = AnalyzeLoci(cur_col_opts);
           for (size_t row_id = 0; row_id < word_size; ++row_id) {
