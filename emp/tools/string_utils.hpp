@@ -848,7 +848,7 @@ namespace emp {
     in_string.resize(pos);
   }
 
-  /// Remove instances of characters from file.
+  /// Remove instances of characters from provided string.
   static inline void remove_chars(std::string & in_string, std::string chars) {
     size_t cur_pos = 0;
     for (size_t i = 0; i < in_string.size(); i++) {
